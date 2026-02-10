@@ -304,6 +304,39 @@ TEST(downsample_2x)
     ASSERT_NEAR( result, 0.7f, 1e-6f );
 }
 
+// --- Task 17: PolyBLEP Anti-Aliasing ---
+
+TEST(polyblep_correction_near_zero)
+{
+    // Near phase discontinuity (phase ≈ 0 or 1), correction is non-zero
+    float dt = 440.0f / 48000.0f;  // phase increment
+    float correction = four::polyblep( 0.001f, dt );
+    ASSERT( fabsf(correction) > 0.0f );
+}
+
+TEST(polyblep_correction_far_from_edge)
+{
+    // Far from discontinuity, correction is zero
+    float dt = 440.0f / 48000.0f;
+    float correction = four::polyblep( 0.5f, dt );
+    ASSERT_NEAR( correction, 0.0f, 1e-6f );
+}
+
+TEST(polyblep_saw_reduces_aliasing)
+{
+    // A PolyBLEP-corrected saw should have less energy at Nyquist
+    // Simple check: the transition region is smoother
+    float dt = 440.0f / 48000.0f;
+    float raw_transition = four::waveform_saw(0.999f) - four::waveform_saw(0.001f);
+    // Raw saw jumps ~2 across the reset
+    ASSERT( fabsf(raw_transition) > 1.5f );
+    // After BLEP, the jump should be reduced
+    float blep0 = four::waveform_saw(0.001f) - four::polyblep(0.001f, dt);
+    float blep1 = four::waveform_saw(0.999f) - four::polyblep(0.999f, dt);
+    float blep_transition = blep1 - blep0;
+    ASSERT( fabsf(blep_transition) < fabsf(raw_transition) );
+}
+
 // --- Runner ---
 
 int main()
@@ -340,6 +373,9 @@ int main()
     run_process_algorithm_1_single_carrier();
     run_gather_modulation();
     run_downsample_2x();
+    run_polyblep_correction_near_zero();
+    run_polyblep_correction_far_from_edge();
+    run_polyblep_saw_reduces_aliasing();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;

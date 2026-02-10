@@ -524,7 +524,17 @@ static void step(
 
                 float sample;
                 if ( warp > 0.0f )
-                    sample = four::wave_warp( modPhase, warp );
+                {
+                    if ( p->polyblep )
+                    {
+                        float dt = opFreq[op] / effectiveSampleRate;
+                        sample = four::wave_warp_blep( modPhase, warp, dt );
+                    }
+                    else
+                    {
+                        sample = four::wave_warp( modPhase, warp );
+                    }
+                }
                 else
                     sample = four::oscillator_sine( modPhase );
 

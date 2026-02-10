@@ -231,6 +231,73 @@ inline float downsample_2x( float s0, float s1 )
     return ( s0 + s1 ) * 0.5f;
 }
 
+// PolyBLEP correction for discontinuities
+// phase: normalized [0, 1), dt: phase increment per sample
+// Returns correction to subtract from waveform at discontinuity points
+inline float polyblep( float phase, float dt )
+{
+    // Near phase = 0 (beginning of cycle)
+    if ( phase < dt )
+    {
+        float t = phase / dt;
+        return t + t - t * t - 1.0f;
+    }
+    // Near phase = 1 (end of cycle)
+    else if ( phase > 1.0f - dt )
+    {
+        float t = ( phase - 1.0f ) / dt;
+        return t * t + t + t + 1.0f;
+    }
+    return 0.0f;
+}
+
+// PolyBLEP-corrected saw
+inline float waveform_saw_blep( float phase, float dt )
+{
+    return waveform_saw( phase ) - polyblep( phase, dt );
+}
+
+// PolyBLEP-corrected pulse
+inline float waveform_pulse_blep( float phase, float dt )
+{
+    float p = waveform_pulse( phase );
+    p += polyblep( phase, dt );               // Rising edge at 0
+    float shifted = phase + 0.5f;
+    if ( shifted >= 1.0f ) shifted -= 1.0f;
+    p -= polyblep( shifted, dt );             // Falling edge at 0.5
+    return p;
+}
+
+// Wave warp with optional PolyBLEP (for anti-aliasing saw/pulse)
+inline float wave_warp_blep( float phase, float warp, float dt )
+{
+    if ( warp <= 0.0f )
+        return oscillator_sine( phase );
+
+    float sine = oscillator_sine( phase );
+
+    if ( warp <= 1.0f / 3.0f )
+    {
+        float t = warp * 3.0f;
+        float tri = waveform_triangle( phase );
+        return sine + t * ( tri - sine );
+    }
+    else if ( warp <= 2.0f / 3.0f )
+    {
+        float t = ( warp - 1.0f / 3.0f ) * 3.0f;
+        float tri = waveform_triangle( phase );
+        float saw = waveform_saw_blep( phase, dt );
+        return tri + t * ( saw - tri );
+    }
+    else
+    {
+        float t = ( warp - 2.0f / 3.0f ) * 3.0f;
+        float saw = waveform_saw_blep( phase, dt );
+        float pls = waveform_pulse_blep( phase, dt );
+        return saw + t * ( pls - saw );
+    }
+}
+
 } // namespace four
 
 #endif // FOUR_DSP_H
