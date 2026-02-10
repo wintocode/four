@@ -403,18 +403,159 @@ static void step(
     float* busFrames,
     int numFramesBy4 )
 {
-    _fourAlgorithm* pThis = (_fourAlgorithm*)self;
+    _fourAlgorithm* p = (_fourAlgorithm*)self;
     int numFrames = numFramesBy4 * 4;
 
-    float* out = busFrames + ( pThis->v[kParamOutput] - 1 ) * numFrames;
-    bool replace = pThis->v[kParamOutputMode];
+    float* out = busFrames + ( p->v[kParamOutput] - 1 ) * numFrames;
+    bool replace = p->v[kParamOutputMode];
+
+    float sampleRate = (float)NT_globals.sampleRate;
+    const four::Algorithm& algo = four::algorithms[p->algorithm];
+
+    // Read CV buses (0 = not connected)
+    const float* cvVOct     = p->v[kParamVOctCV]     ? busFrames + (p->v[kParamVOctCV] - 1) * numFrames     : NULL;
+    const float* cvXM       = p->v[kParamXMCV]       ? busFrames + (p->v[kParamXMCV] - 1) * numFrames       : NULL;
+    const float* cvFM       = p->v[kParamFMCV]       ? busFrames + (p->v[kParamFMCV] - 1) * numFrames       : NULL;
+    const float* cvSync     = p->v[kParamSyncCV]     ? busFrames + (p->v[kParamSyncCV] - 1) * numFrames     : NULL;
+    const float* cvGlobalVCA= p->v[kParamGlobalVCACV]? busFrames + (p->v[kParamGlobalVCACV] - 1) * numFrames: NULL;
+
+    const float* cvAM[4];
+    const float* cvPM[4];
+    const float* cvWarp[4];
+    const float* cvFold[4];
+    for ( int op = 0; op < 4; ++op )
+    {
+        int16_t bus;
+        bus = p->v[opAMCV(op)];   cvAM[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opPMCV(op)];   cvPM[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opWarpCV(op)]; cvWarp[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFoldCV(op)]; cvFold[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
+    }
+
+    // Sync state (edge detection)
+    float prevSync = p->dsBuffer[1];
+
+    // Pre-compute operator frequencies
+    float opFreq[4];
+    for ( int op = 0; op < 4; ++op )
+    {
+        float base = p->baseFrequency * p->pitchBendFactor * p->fineTune;
+        if ( p->opFreqMode[op] == 0 )  // Ratio
+            opFreq[op] = four::calc_frequency_ratio( base, p->opCoarse[op], p->opFine[op] );
+        else  // Fixed
+            opFreq[op] = four::calc_frequency_fixed( p->opCoarse[op], p->opFine[op] );
+    }
 
     for ( int i = 0; i < numFrames; ++i )
     {
+        // --- Per-sample modulations ---
+
+        // V/OCT: overridden by MIDI when gate is on
+        float baseFreq = p->baseFrequency;
+        if ( cvVOct && !p->midiGate )
+            baseFreq = four::voct_to_freq( cvVOct[i] );
+
+        // Recompute op frequencies if V/OCT varies per sample
+        if ( cvVOct || cvFM )
+        {
+            for ( int op = 0; op < 4; ++op )
+            {
+                float base = baseFreq * p->pitchBendFactor * p->fineTune;
+                float fm = cvFM ? cvFM[i] * 1000.0f : 0.0f;
+                if ( p->opFreqMode[op] == 0 )
+                    opFreq[op] = four::calc_frequency_ratio( base, p->opCoarse[op], p->opFine[op] ) + fm;
+                else
+                    opFreq[op] = four::calc_frequency_fixed( p->opCoarse[op], p->opFine[op] ) + fm;
+                if ( opFreq[op] < 0.0f ) opFreq[op] = 0.0f;
+            }
+        }
+
+        // Sync: reset all phases on rising edge
+        if ( cvSync )
+        {
+            if ( cvSync[i] > 0.5f && prevSync <= 0.5f )
+            {
+                for ( int op = 0; op < 4; ++op )
+                    p->phase[op] = 0.0f;
+            }
+            prevSync = cvSync[i];
+        }
+
+        // XM with CV
+        float xm = p->xm;
+        if ( cvXM )
+            xm = fminf( 1.0f, fmaxf( 0.0f, xm + cvXM[i] * 0.2f ) );
+
+        // --- Process operators (4 → 3 → 2 → 1) ---
+        float opOut[4];
+
+        for ( int op = 3; op >= 0; --op )
+        {
+            // Phase increment
+            float inc = opFreq[op] / sampleRate;
+
+            // Gather modulation from algorithm routing
+            float pm = four::gather_modulation( op, opOut, p->opLevel, xm, algo );
+
+            // Self-feedback
+            pm += four::calc_feedback( p->prevOutput[op], p->opFeedback[op] );
+
+            // External PM CV
+            if ( cvPM[op] )
+                pm += cvPM[op][i];
+
+            // Advance phase
+            four::phase_advance( p->phase[op], inc );
+
+            // Compute waveform
+            float modPhase = p->phase[op] + pm;
+            modPhase -= floorf( modPhase );  // Wrap to [0, 1)
+
+            // Warp amount with CV
+            float warp = p->opWarp[op];
+            if ( cvWarp[op] )
+                warp = fminf( 1.0f, fmaxf( 0.0f, warp + cvWarp[op][i] * 0.2f ) );
+
+            float sample;
+            if ( warp > 0.0f )
+                sample = four::wave_warp( modPhase, warp );
+            else
+                sample = four::oscillator_sine( modPhase );
+
+            // Fold amount with CV
+            float fold = p->opFold[op];
+            if ( cvFold[op] )
+                fold = fminf( 1.0f, fmaxf( 0.0f, fold + cvFold[op][i] * 0.2f ) );
+
+            if ( fold > 0.0f )
+                sample = four::wave_fold( sample, fold, p->opFoldType[op] );
+
+            // AM CV
+            if ( cvAM[op] )
+                sample *= fmaxf( 0.0f, 1.0f + cvAM[op][i] );
+
+            opOut[op] = sample;
+            p->prevOutput[op] = sample;
+        }
+
+        // --- Sum carriers ---
+        float mix = four::sum_carriers( opOut, p->opLevel, algo );
+
+        // Global VCA with CV
+        float vca = p->globalVCA;
+        if ( cvGlobalVCA )
+            vca *= fmaxf( 0.0f, cvGlobalVCA[i] * 0.2f );
+
+        mix *= vca;
+
+        // Output
         if ( replace )
-            out[i] = 0.0f;
-        // else: leave bus content (add mode, adding 0)
+            out[i] = mix;
+        else
+            out[i] += mix;
     }
+
+    p->dsBuffer[1] = prevSync;  // Store sync state
 }
 
 // --- Factory ---
