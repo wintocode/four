@@ -8,7 +8,66 @@
 
 struct _fourAlgorithm : public _NT_algorithm
 {
-    _fourAlgorithm() {}
+    // Oscillator state
+    float phase[4];
+    float prevOutput[4];     // Previous output for feedback
+
+    // Cached parameter values (set by parameterChanged)
+    float opLevel[4];        // 0.0-1.0
+    float opFeedback[4];     // 0.0-1.0
+    float opWarp[4];         // 0.0-1.0
+    float opFold[4];         // 0.0-1.0
+    uint8_t opFoldType[4];   // 0-2
+    uint8_t opFreqMode[4];   // 0=ratio, 1=fixed
+    float opCoarse[4];       // harmonic ratio (ratio mode) or Hz (fixed mode)
+    float opFine[4];         // multiplier from cents
+
+    float xm;                // 0.0-1.0
+    float globalVCA;         // 0.0-1.0
+    float fineTune;          // multiplier from cents
+    uint8_t algorithm;       // 0-7
+    uint8_t oversample;      // 0=off, 1=2x
+    uint8_t polyblep;        // 0=off, 1=on
+
+    // MIDI state
+    float baseFrequency;     // Hz, from V/OCT or MIDI
+    float pitchBendFactor;   // multiplier (1.0 = no bend)
+    uint8_t midiNote;        // current MIDI note number
+    uint8_t midiGate;        // 1=on, 0=off
+    uint8_t midiChannel;     // 0-15
+
+    // Oversampling state
+    float dsBuffer[2];       // Downsample filter state
+
+    _fourAlgorithm()
+    {
+        memset( phase, 0, sizeof(phase) );
+        memset( prevOutput, 0, sizeof(prevOutput) );
+        for ( int i = 0; i < 4; ++i )
+        {
+            opLevel[i] = 1.0f;
+            opFeedback[i] = 0.0f;
+            opWarp[i] = 0.0f;
+            opFold[i] = 0.0f;
+            opFoldType[i] = 0;
+            opFreqMode[i] = 0;
+            opCoarse[i] = 1.0f;
+            opFine[i] = 1.0f;
+        }
+        xm = 0.0f;
+        globalVCA = 1.0f;
+        fineTune = 1.0f;
+        algorithm = 0;
+        oversample = 0;
+        polyblep = 0;
+        baseFrequency = 261.63f;  // C4
+        pitchBendFactor = 1.0f;
+        midiNote = 60;
+        midiGate = 0;
+        midiChannel = 0;
+        dsBuffer[0] = 0.0f;
+        dsBuffer[1] = 0.0f;
+    }
 };
 
 // --- Parameter indices ---
@@ -247,6 +306,96 @@ static _NT_algorithm* construct(
     return alg;
 }
 
+// --- Parameter changed ---
+
+static void parameterChanged( _NT_algorithm* self, int parameter )
+{
+    _fourAlgorithm* p = (_fourAlgorithm*)self;
+
+    // Per-operator parameters
+    for ( int op = 0; op < 4; ++op )
+    {
+        int base = kParamOp1FreqMode + op * 8;
+        if ( parameter >= base && parameter < base + 8 )
+        {
+            int offset = parameter - base;
+            switch ( offset )
+            {
+            case kOpFreqMode:
+            {
+                p->opFreqMode[op] = p->v[parameter];
+                // Update coarse param range based on mode
+                int coarseIdx = base + kOpCoarse;
+                if ( p->opFreqMode[op] == 0 ) // Ratio
+                {
+                    parameters[coarseIdx].min = 1;
+                    parameters[coarseIdx].max = 32;
+                    parameters[coarseIdx].unit = kNT_unitNone;
+                }
+                else // Fixed
+                {
+                    parameters[coarseIdx].min = 1;
+                    parameters[coarseIdx].max = 9999;
+                    parameters[coarseIdx].unit = kNT_unitHz;
+                }
+                NT_updateParameterDefinition(
+                    NT_algorithmIndex(self), coarseIdx );
+                break;
+            }
+            case kOpCoarse:
+                p->opCoarse[op] = (float)p->v[parameter];
+                break;
+            case kOpFine:
+                // Convert cents to ratio multiplier: 2^(cents/1200)
+                p->opFine[op] = exp2f( (float)p->v[parameter] / 1200.0f );
+                break;
+            case kOpLevel:
+                p->opLevel[op] = (float)p->v[parameter] * 0.01f;
+                break;
+            case kOpFeedback:
+                p->opFeedback[op] = (float)p->v[parameter] * 0.01f;
+                break;
+            case kOpWarp:
+                p->opWarp[op] = (float)p->v[parameter] * 0.01f;
+                break;
+            case kOpFold:
+                p->opFold[op] = (float)p->v[parameter] * 0.01f;
+                break;
+            case kOpFoldType:
+                p->opFoldType[op] = p->v[parameter];
+                break;
+            }
+            return;
+        }
+    }
+
+    // Global parameters
+    switch ( parameter )
+    {
+    case kParamAlgorithm:
+        p->algorithm = p->v[parameter];
+        break;
+    case kParamXM:
+        p->xm = (float)p->v[parameter] * 0.01f;
+        break;
+    case kParamFineTune:
+        p->fineTune = exp2f( (float)p->v[parameter] / 1200.0f );
+        break;
+    case kParamOversampling:
+        p->oversample = p->v[parameter];
+        break;
+    case kParamPolyBLEP:
+        p->polyblep = p->v[parameter];
+        break;
+    case kParamMidiChannel:
+        p->midiChannel = p->v[parameter] - 1;  // 1-16 → 0-15
+        break;
+    case kParamGlobalVCA:
+        p->globalVCA = (float)p->v[parameter] * 0.01f;
+        break;
+    }
+}
+
 // --- Audio ---
 
 static void step(
@@ -280,7 +429,7 @@ static const _NT_factory factory = {
     .initialise = NULL,
     .calculateRequirements = calculateRequirements,
     .construct = construct,
-    .parameterChanged = NULL,
+    .parameterChanged = parameterChanged,
     .step = step,
     .draw = NULL,
     .midiRealtime = NULL,
