@@ -116,6 +116,48 @@ TEST(midi_note_to_freq)
     ASSERT_NEAR( four::midi_note_to_freq(60), 261.63f, 0.5f );
 }
 
+// --- Task 9: Wave Warp ---
+
+TEST(warp_zero_is_passthrough)
+{
+    // Warp=0 returns original value unchanged (sine passthrough)
+    for ( float ph = 0.0f; ph < 1.0f; ph += 0.1f )
+    {
+        float sine = four::oscillator_sine(ph);
+        ASSERT_NEAR( four::wave_warp(ph, 0.0f), sine, 1e-5f );
+    }
+}
+
+TEST(warp_triangle)
+{
+    // Warp≈0.333: triangle wave
+    // Triangle at phase 0 = 0, phase 0.25 = 1, phase 0.5 = 0, phase 0.75 = -1
+    float w = 1.0f / 3.0f;
+    ASSERT_NEAR( four::wave_warp(0.0f,  w), 0.0f,  0.15f );
+    ASSERT_NEAR( four::wave_warp(0.25f, w), 1.0f,  0.15f );
+    ASSERT_NEAR( four::wave_warp(0.5f,  w), 0.0f,  0.15f );
+    ASSERT_NEAR( four::wave_warp(0.75f, w), -1.0f, 0.15f );
+}
+
+TEST(warp_saw)
+{
+    // Warp≈0.667: sawtooth. Rises from -1 to +1 then resets.
+    float w = 2.0f / 3.0f;
+    // Near start: close to -1
+    ASSERT( four::wave_warp(0.01f, w) < -0.5f );
+    // Middle: close to 0
+    ASSERT_NEAR( four::wave_warp(0.5f, w), 0.0f, 0.15f );
+    // Near end: close to +1
+    ASSERT( four::wave_warp(0.99f, w) > 0.5f );
+}
+
+TEST(warp_pulse)
+{
+    // Warp=1.0: pulse/square. +1 for first half, -1 for second half.
+    ASSERT( four::wave_warp(0.25f, 1.0f) > 0.9f );
+    ASSERT( four::wave_warp(0.75f, 1.0f) < -0.9f );
+}
+
 // --- Runner ---
 
 int main()
@@ -133,6 +175,10 @@ int main()
     run_freq_fixed_mode();
     run_voct_to_freq();
     run_midi_note_to_freq();
+    run_warp_zero_is_passthrough();
+    run_warp_triangle();
+    run_warp_saw();
+    run_warp_pulse();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;
