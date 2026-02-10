@@ -293,6 +293,17 @@ TEST(gather_modulation)
     ASSERT_NEAR( pm, 0.28f, 1e-5f );
 }
 
+// --- Task 16: 2x Oversampling ---
+
+TEST(downsample_2x)
+{
+    // Simple half-band filter: average of two samples
+    float s0 = 0.8f;
+    float s1 = 0.6f;
+    float result = four::downsample_2x( s0, s1 );
+    ASSERT_NEAR( result, 0.7f, 1e-6f );
+}
+
 // --- Runner ---
 
 int main()
@@ -328,6 +339,7 @@ int main()
     run_process_algorithm_8_sum();
     run_process_algorithm_1_single_carrier();
     run_gather_modulation();
+    run_downsample_2x();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;

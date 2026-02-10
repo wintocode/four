@@ -409,7 +409,9 @@ static void step(
     float* out = busFrames + ( p->v[kParamOutput] - 1 ) * numFrames;
     bool replace = p->v[kParamOutputMode];
 
+    int actualRate = p->oversample ? 2 : 1;
     float sampleRate = (float)NT_globals.sampleRate;
+    float effectiveSampleRate = sampleRate * (float)actualRate;
     const four::Algorithm& algo = four::algorithms[p->algorithm];
 
     // Read CV buses (0 = not connected)
@@ -486,73 +488,85 @@ static void step(
         if ( cvXM )
             xm = fminf( 1.0f, fmaxf( 0.0f, xm + cvXM[i] * 0.2f ) );
 
-        // --- Process operators (4 → 3 → 2 → 1) ---
-        float opOut[4];
+        // --- Process operators with optional oversampling ---
+        float outputSample = 0.0f;
 
-        for ( int op = 3; op >= 0; --op )
+        for ( int os = 0; os < actualRate; ++os )
         {
-            // Phase increment
-            float inc = opFreq[op] / sampleRate;
+            float opOut[4];
 
-            // Gather modulation from algorithm routing
-            float pm = four::gather_modulation( op, opOut, p->opLevel, xm, algo );
+            for ( int op = 3; op >= 0; --op )
+            {
+                // Phase increment at effective rate
+                float inc = opFreq[op] / effectiveSampleRate;
 
-            // Self-feedback
-            pm += four::calc_feedback( p->prevOutput[op], p->opFeedback[op] );
+                // Gather modulation from algorithm routing
+                float pm = four::gather_modulation( op, opOut, p->opLevel, xm, algo );
 
-            // External PM CV
-            if ( cvPM[op] )
-                pm += cvPM[op][i];
+                // Self-feedback
+                pm += four::calc_feedback( p->prevOutput[op], p->opFeedback[op] );
 
-            // Advance phase
-            four::phase_advance( p->phase[op], inc );
+                // External PM CV
+                if ( cvPM[op] )
+                    pm += cvPM[op][i];
 
-            // Compute waveform
-            float modPhase = p->phase[op] + pm;
-            modPhase -= floorf( modPhase );  // Wrap to [0, 1)
+                // Advance phase
+                four::phase_advance( p->phase[op], inc );
 
-            // Warp amount with CV
-            float warp = p->opWarp[op];
-            if ( cvWarp[op] )
-                warp = fminf( 1.0f, fmaxf( 0.0f, warp + cvWarp[op][i] * 0.2f ) );
+                // Compute waveform
+                float modPhase = p->phase[op] + pm;
+                modPhase -= floorf( modPhase );  // Wrap to [0, 1)
 
-            float sample;
-            if ( warp > 0.0f )
-                sample = four::wave_warp( modPhase, warp );
+                // Warp amount with CV
+                float warp = p->opWarp[op];
+                if ( cvWarp[op] )
+                    warp = fminf( 1.0f, fmaxf( 0.0f, warp + cvWarp[op][i] * 0.2f ) );
+
+                float sample;
+                if ( warp > 0.0f )
+                    sample = four::wave_warp( modPhase, warp );
+                else
+                    sample = four::oscillator_sine( modPhase );
+
+                // Fold amount with CV
+                float fold = p->opFold[op];
+                if ( cvFold[op] )
+                    fold = fminf( 1.0f, fmaxf( 0.0f, fold + cvFold[op][i] * 0.2f ) );
+
+                if ( fold > 0.0f )
+                    sample = four::wave_fold( sample, fold, p->opFoldType[op] );
+
+                // AM CV
+                if ( cvAM[op] )
+                    sample *= fmaxf( 0.0f, 1.0f + cvAM[op][i] );
+
+                opOut[op] = sample;
+                p->prevOutput[op] = sample;
+            }
+
+            // --- Sum carriers ---
+            float subSample = four::sum_carriers( opOut, p->opLevel, algo );
+
+            // Global VCA with CV
+            float vca = p->globalVCA;
+            if ( cvGlobalVCA )
+                vca *= fmaxf( 0.0f, cvGlobalVCA[i] * 0.2f );
+
+            subSample *= vca;
+
+            if ( actualRate == 1 )
+                outputSample = subSample;
+            else if ( os == 0 )
+                p->dsBuffer[0] = subSample;
             else
-                sample = four::oscillator_sine( modPhase );
-
-            // Fold amount with CV
-            float fold = p->opFold[op];
-            if ( cvFold[op] )
-                fold = fminf( 1.0f, fmaxf( 0.0f, fold + cvFold[op][i] * 0.2f ) );
-
-            if ( fold > 0.0f )
-                sample = four::wave_fold( sample, fold, p->opFoldType[op] );
-
-            // AM CV
-            if ( cvAM[op] )
-                sample *= fmaxf( 0.0f, 1.0f + cvAM[op][i] );
-
-            opOut[op] = sample;
-            p->prevOutput[op] = sample;
+                outputSample = four::downsample_2x( p->dsBuffer[0], subSample );
         }
-
-        // --- Sum carriers ---
-        float mix = four::sum_carriers( opOut, p->opLevel, algo );
-
-        // Global VCA with CV
-        float vca = p->globalVCA;
-        if ( cvGlobalVCA )
-            vca *= fmaxf( 0.0f, cvGlobalVCA[i] * 0.2f );
-
-        mix *= vca;
 
         // Output
         if ( replace )
-            out[i] = mix;
+            out[i] = outputSample;
         else
-            out[i] += mix;
+            out[i] += outputSample;
     }
 
     p->dsBuffer[1] = prevSync;  // Store sync state

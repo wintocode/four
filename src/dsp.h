@@ -224,6 +224,13 @@ inline float calc_feedback( float prev_output, float amount )
     return soft_clip( prev_output * amount );
 }
 
+// Simple 2× downsampler (half-band average)
+// s0: first sample (even), s1: second sample (odd)
+inline float downsample_2x( float s0, float s1 )
+{
+    return ( s0 + s1 ) * 0.5f;
+}
+
 } // namespace four
 
 #endif // FOUR_DSP_H
