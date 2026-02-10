@@ -100,6 +100,49 @@ inline float wave_warp( float phase, float warp )
     }
 }
 
+// Soft clipping function (tanh approximation, fast)
+inline float soft_clip( float x )
+{
+    if ( x < -3.0f ) return -1.0f;
+    if ( x >  3.0f ) return  1.0f;
+    float x2 = x * x;
+    return x * ( 27.0f + x2 ) / ( 27.0f + 9.0f * x2 );
+}
+
+// Symmetric fold: sin-based fold that wraps signal back within [-1, 1]
+inline float fold_symmetric( float x )
+{
+    return sinf( x * 1.5707963f );  // sin(x * π/2)
+}
+
+// Asymmetric fold: positive folds, negative clips
+inline float fold_asymmetric( float x )
+{
+    if ( x >= 0.0f )
+        return sinf( x * 1.5707963f );
+    else
+        return soft_clip( x );
+}
+
+// Wave fold: applies drive based on fold amount, then folds
+// input: signal [-1, 1], amount: 0.0-1.0, type: 0=sym, 1=asym, 2=soft
+inline float wave_fold( float input, float amount, int type )
+{
+    if ( amount <= 0.0f )
+        return input;
+
+    // Drive: scale input by 1 + amount * 4 (up to 5× drive at max)
+    float driven = input * ( 1.0f + amount * 4.0f );
+
+    switch ( type )
+    {
+    case 0:  return fold_symmetric( driven );
+    case 1:  return fold_asymmetric( driven );
+    case 2:  return soft_clip( driven );
+    default: return soft_clip( driven );
+    }
+}
+
 } // namespace four
 
 #endif // FOUR_DSP_H

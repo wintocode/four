@@ -158,6 +158,51 @@ TEST(warp_pulse)
     ASSERT( four::wave_warp(0.75f, 1.0f) < -0.9f );
 }
 
+// --- Task 10: Wave Fold ---
+
+TEST(fold_zero_is_passthrough)
+{
+    ASSERT_NEAR( four::wave_fold(0.5f, 0.0f, 0), 0.5f, 1e-6f );
+    ASSERT_NEAR( four::wave_fold(-0.3f, 0.0f, 1), -0.3f, 1e-6f );
+    ASSERT_NEAR( four::wave_fold(0.7f, 0.0f, 2), 0.7f, 1e-6f );
+}
+
+TEST(fold_symmetric)
+{
+    // Symmetric fold: signal folds back when exceeding ±1
+    // With moderate fold, a 0.8 input driven to >1 should fold back
+    float result = four::wave_fold( 0.8f, 0.5f, 0 );
+    ASSERT( result >= -1.0f && result <= 1.0f );
+}
+
+TEST(fold_symmetric_stays_bounded)
+{
+    // Even with extreme fold, output stays in [-1, 1]
+    for ( float input = -1.0f; input <= 1.0f; input += 0.1f )
+    {
+        float result = four::wave_fold( input, 1.0f, 0 );
+        ASSERT( result >= -1.01f && result <= 1.01f );
+    }
+}
+
+TEST(fold_asymmetric_stays_bounded)
+{
+    for ( float input = -1.0f; input <= 1.0f; input += 0.1f )
+    {
+        float result = four::wave_fold( input, 1.0f, 1 );
+        ASSERT( result >= -1.01f && result <= 1.01f );
+    }
+}
+
+TEST(fold_softclip_stays_bounded)
+{
+    for ( float input = -1.0f; input <= 1.0f; input += 0.1f )
+    {
+        float result = four::wave_fold( input, 1.0f, 2 );
+        ASSERT( result >= -1.01f && result <= 1.01f );
+    }
+}
+
 // --- Runner ---
 
 int main()
@@ -179,6 +224,11 @@ int main()
     run_warp_triangle();
     run_warp_saw();
     run_warp_pulse();
+    run_fold_zero_is_passthrough();
+    run_fold_symmetric();
+    run_fold_symmetric_stays_bounded();
+    run_fold_asymmetric_stays_bounded();
+    run_fold_softclip_stays_bounded();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;
