@@ -76,6 +76,46 @@ TEST(phase_advance_wraps)
     ASSERT_NEAR( phase, 0.009f, 1e-6f );
 }
 
+// --- Task 8: Frequency Calculation ---
+
+TEST(freq_ratio_mode)
+{
+    // Ratio mode: base * coarse * fine_cents_multiplier
+    // Base 440Hz, coarse 2, fine 0 cents → 880Hz
+    float f = four::calc_frequency_ratio( 440.0f, 2.0f, 1.0f );
+    ASSERT_NEAR( f, 880.0f, 0.01f );
+}
+
+TEST(freq_ratio_with_fine)
+{
+    // Base 440Hz, coarse 1, fine +100 cents → 440 * 2^(100/1200)
+    float fine = exp2f( 100.0f / 1200.0f );
+    float f = four::calc_frequency_ratio( 440.0f, 1.0f, fine );
+    ASSERT_NEAR( f, 440.0f * fine, 0.01f );
+}
+
+TEST(freq_fixed_mode)
+{
+    // Fixed mode: coarse_hz * fine_cents_multiplier
+    float f = four::calc_frequency_fixed( 1000.0f, 1.0f );
+    ASSERT_NEAR( f, 1000.0f, 0.01f );
+}
+
+TEST(voct_to_freq)
+{
+    // 0V = C4 (261.63 Hz), 1V = C5 (523.25 Hz)
+    ASSERT_NEAR( four::voct_to_freq(0.0f), 261.63f, 0.5f );
+    ASSERT_NEAR( four::voct_to_freq(1.0f), 523.25f, 0.5f );
+}
+
+TEST(midi_note_to_freq)
+{
+    // MIDI 69 = A4 = 440Hz
+    ASSERT_NEAR( four::midi_note_to_freq(69), 440.0f, 0.01f );
+    // MIDI 60 = C4 = 261.63Hz
+    ASSERT_NEAR( four::midi_note_to_freq(60), 261.63f, 0.5f );
+}
+
 // --- Runner ---
 
 int main()
@@ -88,6 +128,11 @@ int main()
     run_oscillator_sine_half();
     run_phase_advance();
     run_phase_advance_wraps();
+    run_freq_ratio_mode();
+    run_freq_ratio_with_fine();
+    run_freq_fixed_mode();
+    run_voct_to_freq();
+    run_midi_note_to_freq();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;
