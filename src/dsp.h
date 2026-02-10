@@ -8,6 +8,21 @@
 
 namespace four {
 
+static constexpr float TWO_PI = 6.283185307179586f;
+
+// Compute sine from normalized phase [0, 1)
+inline float oscillator_sine( float phase )
+{
+    return sinf( phase * TWO_PI );
+}
+
+// Advance phase by increment, wrap to [0, 1)
+inline void phase_advance( float& phase, float increment )
+{
+    phase += increment;
+    phase -= floorf( phase );
+}
+
 } // namespace four
 
 #endif // FOUR_DSP_H
