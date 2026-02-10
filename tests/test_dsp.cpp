@@ -225,6 +225,74 @@ TEST(feedback_is_bounded)
     ASSERT( result >= -1.0f && result <= 1.0f );
 }
 
+// --- Task 12: Algorithm Routing ---
+
+TEST(algorithm_1_serial_chain)
+{
+    // Algo 1: 4→3→2→1, carrier: 1
+    const four::Algorithm& a = four::algorithms[0];
+    ASSERT( a.mod[3][2] );   // 4→3
+    ASSERT( a.mod[2][1] );   // 3→2
+    ASSERT( a.mod[1][0] );   // 2→1
+    ASSERT( a.carrier[0] );
+    ASSERT( !a.carrier[1] );
+    ASSERT( !a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_5_two_pairs)
+{
+    // Algo 5: (4→3) + (2→1), carriers: {1, 3}
+    const four::Algorithm& a = four::algorithms[4];
+    ASSERT( a.mod[3][2] );   // 4→3
+    ASSERT( a.mod[1][0] );   // 2→1
+    ASSERT( a.carrier[0] );  // op1 carrier
+    ASSERT( a.carrier[2] );  // op3 carrier
+    ASSERT( !a.carrier[1] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_8_all_carriers)
+{
+    // Algo 8: all carriers, no modulation
+    const four::Algorithm& a = four::algorithms[7];
+    for ( int i = 0; i < 4; ++i )
+    {
+        ASSERT( a.carrier[i] );
+        for ( int j = 0; j < 4; ++j )
+            ASSERT( !a.mod[i][j] );
+    }
+}
+
+TEST(process_algorithm_8_sum)
+{
+    // All carriers: output = sum of all op levels
+    float opOut[4] = { 0.5f, 0.3f, 0.2f, 0.1f };
+    float level[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+    float result = four::sum_carriers( opOut, level, four::algorithms[7] );
+    ASSERT_NEAR( result, 1.1f, 1e-6f );
+}
+
+TEST(process_algorithm_1_single_carrier)
+{
+    // Only op1 (idx 0) is carrier
+    float opOut[4] = { 0.5f, 0.3f, 0.2f, 0.1f };
+    float level[4] = { 0.8f, 1.0f, 1.0f, 1.0f };
+    float result = four::sum_carriers( opOut, level, four::algorithms[0] );
+    ASSERT_NEAR( result, 0.5f * 0.8f, 1e-6f );
+}
+
+TEST(gather_modulation)
+{
+    // For algo 1, op1 (idx 0) should receive modulation from op2 (idx 1)
+    float opOut[4] = { 0.0f, 0.7f, 0.0f, 0.0f };
+    float level[4] = { 1.0f, 0.5f, 1.0f, 1.0f };
+    float xm = 0.8f;
+    float pm = four::gather_modulation( 0, opOut, level, xm, four::algorithms[0] );
+    // Expected: opOut[1] * level[1] * xm = 0.7 * 0.5 * 0.8 = 0.28
+    ASSERT_NEAR( pm, 0.28f, 1e-5f );
+}
+
 // --- Runner ---
 
 int main()
@@ -254,6 +322,12 @@ int main()
     run_feedback_zero_amount();
     run_feedback_full_amount();
     run_feedback_is_bounded();
+    run_algorithm_1_serial_chain();
+    run_algorithm_5_two_pairs();
+    run_algorithm_8_all_carriers();
+    run_process_algorithm_8_sum();
+    run_process_algorithm_1_single_carrier();
+    run_gather_modulation();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;

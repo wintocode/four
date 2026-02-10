@@ -143,6 +143,79 @@ inline float wave_fold( float input, float amount, int type )
     }
 }
 
+struct Algorithm
+{
+    bool mod[4][4];     // mod[src][dst]: src modulates dst
+    bool carrier[4];    // carrier[op]: outputs to mix
+};
+
+// 8 DX9-style algorithms (0-indexed)
+static const Algorithm algorithms[8] = {
+    // Algo 1: 4→3→2→1, carriers: {1}
+    { { {0,0,0,0}, {1,0,0,0}, {0,1,0,0}, {0,0,1,0} },
+      {true, false, false, false} },
+
+    // Algo 2: (3+4)→2→1, carriers: {1}
+    { { {0,0,0,0}, {1,0,0,0}, {0,1,0,0}, {0,1,0,0} },
+      {true, false, false, false} },
+
+    // Algo 3: (4→2→1) + (3→1), carriers: {1}
+    { { {0,0,0,0}, {1,0,0,0}, {1,0,0,0}, {0,1,0,0} },
+      {true, false, false, false} },
+
+    // Algo 4: (4→3→1) + (2→1), carriers: {1}
+    { { {0,0,0,0}, {1,0,0,0}, {1,0,0,0}, {0,0,1,0} },
+      {true, false, false, false} },
+
+    // Algo 5: (4→3) + (2→1), carriers: {1, 3}
+    { { {0,0,0,0}, {1,0,0,0}, {0,0,0,0}, {0,0,1,0} },
+      {true, false, true, false} },
+
+    // Algo 6: 4→(1,2,3), carriers: {1, 2, 3}
+    { { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {1,1,1,0} },
+      {true, true, true, false} },
+
+    // Algo 7: (4→3) + 2 + 1, carriers: {1, 2, 3}
+    { { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,1,0} },
+      {true, true, true, false} },
+
+    // Algo 8: 1+2+3+4, carriers: all
+    { { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} },
+      {true, true, true, true} },
+};
+
+// Gather phase modulation for a target operator from all sources
+inline float gather_modulation(
+    int target,
+    const float opOut[4],
+    const float level[4],
+    float xm,
+    const Algorithm& algo )
+{
+    float pm = 0.0f;
+    for ( int src = 0; src < 4; ++src )
+    {
+        if ( algo.mod[src][target] )
+            pm += opOut[src] * level[src] * xm;
+    }
+    return pm;
+}
+
+// Sum carrier outputs
+inline float sum_carriers(
+    const float opOut[4],
+    const float level[4],
+    const Algorithm& algo )
+{
+    float mix = 0.0f;
+    for ( int op = 0; op < 4; ++op )
+    {
+        if ( algo.carrier[op] )
+            mix += opOut[op] * level[op];
+    }
+    return mix;
+}
+
 // Calculate feedback contribution from previous output
 // prev_output: previous sample output, amount: 0.0-1.0
 // Returns phase modulation amount (bounded)
