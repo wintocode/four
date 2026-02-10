@@ -1,0 +1,2 @@
+# Ignore SMB delete files
+.smbdelete*
