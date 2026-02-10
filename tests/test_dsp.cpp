@@ -203,6 +203,28 @@ TEST(fold_softclip_stays_bounded)
     }
 }
 
+// --- Task 11: Self-Feedback ---
+
+TEST(feedback_zero_amount)
+{
+    // No feedback → 0 contribution
+    ASSERT_NEAR( four::calc_feedback(0.5f, 0.0f), 0.0f, 1e-6f );
+}
+
+TEST(feedback_full_amount)
+{
+    // Full feedback → soft-clipped previous output
+    float result = four::calc_feedback( 0.8f, 1.0f );
+    ASSERT( result > 0.0f && result <= 1.0f );
+}
+
+TEST(feedback_is_bounded)
+{
+    // Even with extreme previous output, feedback stays bounded
+    float result = four::calc_feedback( 10.0f, 1.0f );
+    ASSERT( result >= -1.0f && result <= 1.0f );
+}
+
 // --- Runner ---
 
 int main()
@@ -229,6 +251,9 @@ int main()
     run_fold_symmetric_stays_bounded();
     run_fold_asymmetric_stays_bounded();
     run_fold_softclip_stays_bounded();
+    run_feedback_zero_amount();
+    run_feedback_full_amount();
+    run_feedback_is_bounded();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;

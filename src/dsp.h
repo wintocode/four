@@ -143,6 +143,14 @@ inline float wave_fold( float input, float amount, int type )
     }
 }
 
+// Calculate feedback contribution from previous output
+// prev_output: previous sample output, amount: 0.0-1.0
+// Returns phase modulation amount (bounded)
+inline float calc_feedback( float prev_output, float amount )
+{
+    return soft_clip( prev_output * amount );
+}
+
 } // namespace four
 
 #endif // FOUR_DSP_H
