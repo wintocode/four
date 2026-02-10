@@ -282,6 +282,42 @@ static const _NT_parameterPages parameterPages = {
     .pages = pages,
 };
 
+// --- MIDI CC mapping ---
+
+// CC 14-52 → parameter indices kParamAlgorithm..kParamOp4FoldType
+// All other CCs are unmapped (-1)
+static const int8_t ccToParam[128] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,                     // 0-13
+    kParamAlgorithm, kParamXM, kParamFineTune,                      // 14-16
+    kParamOversampling, kParamPolyBLEP, kParamMidiChannel,          // 17-19
+    kParamGlobalVCA,                                                // 20
+    kParamOp1FreqMode, kParamOp1Coarse, kParamOp1Fine,             // 21-23
+    kParamOp1Level, kParamOp1Feedback, kParamOp1Warp,              // 24-26
+    kParamOp1Fold, kParamOp1FoldType,                              // 27-28
+    kParamOp2FreqMode, kParamOp2Coarse, kParamOp2Fine,             // 29-31
+    kParamOp2Level, kParamOp2Feedback, kParamOp2Warp,              // 32-34
+    kParamOp2Fold, kParamOp2FoldType,                              // 35-36
+    kParamOp3FreqMode, kParamOp3Coarse, kParamOp3Fine,             // 37-39
+    kParamOp3Level, kParamOp3Feedback, kParamOp3Warp,              // 40-42
+    kParamOp3Fold, kParamOp3FoldType,                              // 43-44
+    kParamOp4FreqMode, kParamOp4Coarse, kParamOp4Fine,             // 45-47
+    kParamOp4Level, kParamOp4Feedback, kParamOp4Warp,              // 48-50
+    kParamOp4Fold, kParamOp4FoldType,                              // 51-52
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 53-68
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 69-84
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 85-100
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 101-116
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,                              // 117-127
+};
+
+// Scale CC value (0-127) to parameter's min..max range
+static int16_t scaleCCToParam( uint8_t ccValue, int paramIndex )
+{
+    int16_t mn = parameters[paramIndex].min;
+    int16_t mx = parameters[paramIndex].max;
+    return mn + (int16_t)( (int32_t)ccValue * ( mx - mn ) / 127 );
+}
+
 // --- Lifecycle ---
 
 static void calculateRequirements(
@@ -619,6 +655,17 @@ static void midiMessage(
         if ( byte1 == p->midiNote )
             p->midiGate = 0;
         break;
+
+    case 0xB0:  // Control Change
+    {
+        int8_t paramIdx = ccToParam[byte1];
+        if ( paramIdx >= 0 )
+        {
+            int16_t value = scaleCCToParam( byte2, paramIdx );
+            NT_setParameterFromAudio( NT_algorithmIndex(self), paramIdx, value );
+        }
+        break;
+    }
 
     case 0xE0:  // Pitch Bend
     {
