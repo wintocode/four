@@ -558,6 +558,55 @@ static void step(
     p->dsBuffer[1] = prevSync;  // Store sync state
 }
 
+// --- MIDI ---
+
+static void midiMessage(
+    _NT_algorithm* self,
+    uint8_t byte0,
+    uint8_t byte1,
+    uint8_t byte2 )
+{
+    _fourAlgorithm* p = (_fourAlgorithm*)self;
+
+    uint8_t status  = byte0 & 0xF0;
+    uint8_t channel = byte0 & 0x0F;
+
+    if ( channel != p->midiChannel )
+        return;
+
+    switch ( status )
+    {
+    case 0x90:  // Note On
+        if ( byte2 > 0 )
+        {
+            p->midiNote = byte1;
+            p->midiGate = 1;
+            p->baseFrequency = four::midi_note_to_freq( byte1 );
+        }
+        else
+        {
+            // Velocity 0 = note off
+            if ( byte1 == p->midiNote )
+                p->midiGate = 0;
+        }
+        break;
+
+    case 0x80:  // Note Off
+        if ( byte1 == p->midiNote )
+            p->midiGate = 0;
+        break;
+
+    case 0xE0:  // Pitch Bend
+    {
+        int16_t bend = ( (int16_t)byte2 << 7 ) | byte1;  // 0-16383
+        float bendNorm = (float)( bend - 8192 ) / 8192.0f;  // -1 to +1
+        // ±2 semitones pitch bend range
+        p->pitchBendFactor = exp2f( bendNorm * 2.0f / 12.0f );
+        break;
+    }
+    }
+}
+
 // --- Factory ---
 
 static const _NT_factory factory = {
@@ -574,7 +623,7 @@ static const _NT_factory factory = {
     .step = step,
     .draw = NULL,
     .midiRealtime = NULL,
-    .midiMessage = NULL,
+    .midiMessage = midiMessage,
     .tags = kNT_tagInstrument,
     .hasCustomUi = NULL,
     .customUi = NULL,
