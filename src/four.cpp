@@ -14,12 +14,14 @@ struct _fourAlgorithm : public _NT_algorithm
 
     // Cached parameter values (set by parameterChanged)
     float opLevel[4];        // 0.0-1.0
+    float opLevelCVDepth[4]; // 0.0-1.0
     float opFeedback[4];     // 0.0-1.0
     float opWarp[4];         // 0.0-1.0
     float opFold[4];         // 0.0-1.0
     uint8_t opFoldType[4];   // 0-2
     uint8_t opFreqMode[4];   // 0=ratio, 1=fixed
-    float opCoarse[4];       // harmonic ratio (ratio mode) or Hz (fixed mode)
+    float opCoarse[4];       // harmonic ratio (ratio mode)
+    float opFixedHz[4];      // Hz (fixed mode)
     float opFine[4];         // multiplier from cents
 
     float xm;                // 0.0-1.0
@@ -46,12 +48,14 @@ struct _fourAlgorithm : public _NT_algorithm
         for ( int i = 0; i < 4; ++i )
         {
             opLevel[i] = 1.0f;
+            opLevelCVDepth[i] = 0.0f;
             opFeedback[i] = 0.0f;
             opWarp[i] = 0.0f;
             opFold[i] = 0.0f;
             opFoldType[i] = 0;
             opFreqMode[i] = 0;
             opCoarse[i] = 1.0f;
+            opFixedHz[i] = 440.0f;
             opFine[i] = 1.0f;
         }
         xm = 0.0f;
@@ -89,6 +93,7 @@ enum {
     // Operator 1
     kParamOp1FreqMode,
     kParamOp1Coarse,
+    kParamOp1FixedHz,
     kParamOp1Fine,
     kParamOp1Level,
     kParamOp1Feedback,
@@ -99,6 +104,7 @@ enum {
     // Operator 2
     kParamOp2FreqMode,
     kParamOp2Coarse,
+    kParamOp2FixedHz,
     kParamOp2Fine,
     kParamOp2Level,
     kParamOp2Feedback,
@@ -109,6 +115,7 @@ enum {
     // Operator 3
     kParamOp3FreqMode,
     kParamOp3Coarse,
+    kParamOp3FixedHz,
     kParamOp3Fine,
     kParamOp3Level,
     kParamOp3Feedback,
@@ -119,6 +126,7 @@ enum {
     // Operator 4
     kParamOp4FreqMode,
     kParamOp4Coarse,
+    kParamOp4FixedHz,
     kParamOp4Fine,
     kParamOp4Level,
     kParamOp4Feedback,
@@ -126,16 +134,22 @@ enum {
     kParamOp4Fold,
     kParamOp4FoldType,
 
+    // Operator Level CV Depth
+    kParamOp1LevelCVDepth,
+    kParamOp2LevelCVDepth,
+    kParamOp3LevelCVDepth,
+    kParamOp4LevelCVDepth,
+
     // CV Inputs
     kParamVOctCV,
     kParamXMCV,
     kParamFMCV,
     kParamSyncCV,
     kParamGlobalVCACV,
-    kParamOp1AMCV,
-    kParamOp2AMCV,
-    kParamOp3AMCV,
-    kParamOp4AMCV,
+    kParamOp1LevelCV,
+    kParamOp2LevelCV,
+    kParamOp3LevelCV,
+    kParamOp4LevelCV,
     kParamOp1PMCV,
     kParamOp2PMCV,
     kParamOp3PMCV,
@@ -153,27 +167,48 @@ enum {
 };
 
 // Helper: first param index for operator N (0-based)
-static inline int opParam( int op, int offset ) { return kParamOp1FreqMode + op * 8 + offset; }
+static inline int opParam( int op, int offset ) { return kParamOp1FreqMode + op * 9 + offset; }
 // Offsets within an operator block
 enum {
     kOpFreqMode = 0,
     kOpCoarse   = 1,
-    kOpFine     = 2,
-    kOpLevel    = 3,
-    kOpFeedback = 4,
-    kOpWarp     = 5,
-    kOpFold     = 6,
-    kOpFoldType = 7,
+    kOpFixedHz  = 2,
+    kOpFine     = 3,
+    kOpLevel    = 4,
+    kOpFeedback = 5,
+    kOpWarp     = 6,
+    kOpFold     = 7,
+    kOpFoldType = 8,
 };
 // Helper: CV param index for operator N (0-based)
-static inline int opAMCV( int op ) { return kParamOp1AMCV + op; }
+static inline int opLevelCV( int op ) { return kParamOp1LevelCV + op; }
 static inline int opPMCV( int op ) { return kParamOp1PMCV + op; }
 static inline int opWarpCV( int op ) { return kParamOp1WarpCV + op; }
 static inline int opFoldCV( int op ) { return kParamOp1FoldCV + op; }
 
 // --- Enum strings ---
 
-static const char* algorithmStrings[] = { "1","2","3","4","5","6","7","8", NULL };
+static const char* algorithmStrings[] = {
+    "4 => 3 => 2 => 1",
+    "(3+4) => 2 => 1",
+    "4 => 2 => 1, 3 => 1",
+    "4 => 3 => 1, 2 => 1",
+    "4 => 3, 2 => 1",
+    "4 => (1, 2, 3)",
+    "4 => 3, 2, 1",
+    "1, 2, 3, 4",
+    NULL
+};
+
+// Ratio strings: 0.25, 0.5, 0.75, then 1.0-32.0 in 0.5 steps
+static const char* ratioStrings[] = {
+    "0.25", "0.5", "0.75",
+    "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5", "5", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5",
+    "10", "10.5", "11", "11.5", "12", "12.5", "13", "13.5", "14", "14.5", "15", "15.5", "16", "16.5", "17", "17.5",
+    "18", "18.5", "19", "19.5", "20", "20.5", "21", "21.5", "22", "22.5", "23", "23.5", "24", "24.5", "25", "25.5",
+    "26", "26.5", "27", "27.5", "28", "28.5", "29", "29.5", "30", "30.5", "31", "31.5", "32",
+    NULL
+};
 static const char* offOnStrings[]     = { "Off","On", NULL };
 static const char* off2xStrings[]     = { "Off","2x", NULL };
 static const char* freqModeStrings[]  = { "Ratio","Fixed", NULL };
@@ -181,10 +216,11 @@ static const char* foldTypeStrings[]  = { "Symmetric","Asymmetric","Soft Clip", 
 
 // --- Parameter definitions ---
 
-// Macro for one operator's 8 parameters
+// Macro for one operator's 9 parameters
 #define OP_PARAMS(n) \
     { "Op" #n " Freq Mode", 0, 1, 0, kNT_unitEnum, 0, freqModeStrings }, \
-    { "Op" #n " Coarse",    1, 32, 1, kNT_unitNone, 0, NULL }, \
+    { "Op" #n " Coarse",    0, 64, 3, kNT_unitEnum, 0, ratioStrings }, \
+    { "Op" #n " Fixed Hz",  1, 9999, 440, kNT_unitHz, 0, NULL }, \
     { "Op" #n " Fine",   -100, 100, 0, kNT_unitCents, 0, NULL }, \
     { "Op" #n " Level",     0, 100, 100, kNT_unitPercent, 0, NULL }, \
     { "Op" #n " Feedback",  0, 100, 0, kNT_unitPercent, 0, NULL }, \
@@ -211,16 +247,22 @@ static _NT_parameter parameters[] = {
     OP_PARAMS(3)
     OP_PARAMS(4)
 
+    // Operator Level CV Depth
+    { "Op1 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+    { "Op2 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+    { "Op3 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+    { "Op4 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+
     // CV Inputs
     NT_PARAMETER_CV_INPUT( "V/OCT CV",       0, 0 )
     NT_PARAMETER_CV_INPUT( "XM CV",          0, 0 )
     NT_PARAMETER_CV_INPUT( "FM CV",          0, 0 )
     NT_PARAMETER_CV_INPUT( "Sync CV",        0, 0 )
     NT_PARAMETER_CV_INPUT( "Global VCA CV",  0, 0 )
-    NT_PARAMETER_CV_INPUT( "Op1 AM CV",      0, 0 )
-    NT_PARAMETER_CV_INPUT( "Op2 AM CV",      0, 0 )
-    NT_PARAMETER_CV_INPUT( "Op3 AM CV",      0, 0 )
-    NT_PARAMETER_CV_INPUT( "Op4 AM CV",      0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op1 Level CV",   0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Level CV",   0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Level CV",   0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Level CV",   0, 0 )
     NT_PARAMETER_CV_INPUT( "Op1 PM CV",      0, 0 )
     NT_PARAMETER_CV_INPUT( "Op2 PM CV",      0, 0 )
     NT_PARAMETER_CV_INPUT( "Op3 PM CV",      0, 0 )
@@ -246,8 +288,8 @@ static const uint8_t pageMIDI[] = { kParamMidiChannel };
 
 #define OP_PAGE(n) \
     static const uint8_t pageOp##n[] = { \
-        kParamOp##n##FreqMode, kParamOp##n##Coarse, kParamOp##n##Fine, \
-        kParamOp##n##Level, kParamOp##n##Feedback, \
+        kParamOp##n##FreqMode, kParamOp##n##Coarse, kParamOp##n##FixedHz, \
+        kParamOp##n##Fine, kParamOp##n##Level, kParamOp##n##Feedback, \
         kParamOp##n##Warp, kParamOp##n##Fold, kParamOp##n##FoldType \
     };
 OP_PAGE(1) OP_PAGE(2) OP_PAGE(3) OP_PAGE(4)
@@ -257,8 +299,8 @@ static const uint8_t pageCVGlobal[] = {
 };
 #define CV_PAGE(n) \
     static const uint8_t pageCVOp##n[] = { \
-        kParamOp##n##AMCV, kParamOp##n##PMCV, \
-        kParamOp##n##WarpCV, kParamOp##n##FoldCV \
+        kParamOp##n##LevelCV, kParamOp##n##LevelCVDepth, \
+        kParamOp##n##PMCV, kParamOp##n##WarpCV, kParamOp##n##FoldCV \
     };
 CV_PAGE(1) CV_PAGE(2) CV_PAGE(3) CV_PAGE(4)
 
@@ -284,30 +326,32 @@ static const _NT_parameterPages parameterPages = {
 
 // --- MIDI CC mapping ---
 
-// CC 14-52 → parameter indices kParamAlgorithm..kParamOp4FoldType
+// CC 14-60 → parameter indices kParamAlgorithm..kParamOp4LevelCVDepth
 // All other CCs are unmapped (-1)
 static const int8_t ccToParam[128] = {
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,                     // 0-13
     kParamAlgorithm, kParamXM, kParamFineTune,                      // 14-16
     kParamOversampling, kParamPolyBLEP, kParamMidiChannel,          // 17-19
     kParamGlobalVCA,                                                // 20
-    kParamOp1FreqMode, kParamOp1Coarse, kParamOp1Fine,             // 21-23
-    kParamOp1Level, kParamOp1Feedback, kParamOp1Warp,              // 24-26
-    kParamOp1Fold, kParamOp1FoldType,                              // 27-28
-    kParamOp2FreqMode, kParamOp2Coarse, kParamOp2Fine,             // 29-31
-    kParamOp2Level, kParamOp2Feedback, kParamOp2Warp,              // 32-34
-    kParamOp2Fold, kParamOp2FoldType,                              // 35-36
-    kParamOp3FreqMode, kParamOp3Coarse, kParamOp3Fine,             // 37-39
-    kParamOp3Level, kParamOp3Feedback, kParamOp3Warp,              // 40-42
-    kParamOp3Fold, kParamOp3FoldType,                              // 43-44
-    kParamOp4FreqMode, kParamOp4Coarse, kParamOp4Fine,             // 45-47
-    kParamOp4Level, kParamOp4Feedback, kParamOp4Warp,              // 48-50
-    kParamOp4Fold, kParamOp4FoldType,                              // 51-52
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 53-68
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 69-84
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 85-100
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 101-116
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,                              // 117-127
+    kParamOp1FreqMode, kParamOp1Coarse, kParamOp1FixedHz,          // 21-23
+    kParamOp1Fine, kParamOp1Level, kParamOp1Feedback,               // 24-26
+    kParamOp1Warp, kParamOp1Fold, kParamOp1FoldType,                // 27-29
+    kParamOp2FreqMode, kParamOp2Coarse, kParamOp2FixedHz,          // 30-32
+    kParamOp2Fine, kParamOp2Level, kParamOp2Feedback,               // 33-35
+    kParamOp2Warp, kParamOp2Fold, kParamOp2FoldType,                // 36-38
+    kParamOp3FreqMode, kParamOp3Coarse, kParamOp3FixedHz,          // 39-41
+    kParamOp3Fine, kParamOp3Level, kParamOp3Feedback,               // 42-44
+    kParamOp3Warp, kParamOp3Fold, kParamOp3FoldType,                // 45-47
+    kParamOp4FreqMode, kParamOp4Coarse, kParamOp4FixedHz,          // 48-50
+    kParamOp4Fine, kParamOp4Level, kParamOp4Feedback,               // 51-53
+    kParamOp4Warp, kParamOp4Fold, kParamOp4FoldType,                // 54-56
+    kParamOp1LevelCVDepth, kParamOp2LevelCVDepth,                  // 57-58
+    kParamOp3LevelCVDepth, kParamOp4LevelCVDepth,                  // 59-60
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 61-76
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 77-92
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 93-108
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 109-124
+    -1,-1,-1                                                       // 125-127
 };
 
 // Scale CC value (0-127) to parameter's min..max range
@@ -351,8 +395,8 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
     // Per-operator parameters
     for ( int op = 0; op < 4; ++op )
     {
-        int base = kParamOp1FreqMode + op * 8;
-        if ( parameter >= base && parameter < base + 8 )
+        int base = kParamOp1FreqMode + op * 9;
+        if ( parameter >= base && parameter < base + 9 )
         {
             int offset = parameter - base;
             switch ( offset )
@@ -360,18 +404,14 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
             case kOpFreqMode:
             {
                 p->opFreqMode[op] = p->v[parameter];
-                // Update coarse param range based on mode
+                // Update coarse param unit display based on mode
                 int coarseIdx = base + kOpCoarse;
                 if ( p->opFreqMode[op] == 0 ) // Ratio
                 {
-                    parameters[coarseIdx].min = 1;
-                    parameters[coarseIdx].max = 32;
-                    parameters[coarseIdx].unit = kNT_unitNone;
+                    parameters[coarseIdx].unit = kNT_unitEnum;
                 }
                 else // Fixed
                 {
-                    parameters[coarseIdx].min = 1;
-                    parameters[coarseIdx].max = 9999;
                     parameters[coarseIdx].unit = kNT_unitHz;
                 }
                 NT_updateParameterDefinition(
@@ -379,8 +419,29 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
                 break;
             }
             case kOpCoarse:
-                p->opCoarse[op] = (float)p->v[parameter];
+            {
+                // Ratio mode: convert enum index to float ratio
+                if ( p->opFreqMode[op] == 0 ) // Ratio
+                {
+                    int idx = p->v[parameter];
+                    if ( idx == 0 )
+                        p->opCoarse[op] = 0.25f;
+                    else if ( idx == 1 )
+                        p->opCoarse[op] = 0.5f;
+                    else if ( idx == 2 )
+                        p->opCoarse[op] = 0.75f;
+                    else
+                        p->opCoarse[op] = (float)( idx - 1 ) * 0.5f;
+                }
+                // Fixed mode: handled by kOpFixedHz, ignore here
                 break;
+            }
+            case kOpFixedHz:
+            {
+                // Fixed mode: Hz value
+                p->opFixedHz[op] = (float)p->v[parameter];
+                break;
+            }
             case kOpFine:
                 // Convert cents to ratio multiplier: 2^(cents/1200)
                 p->opFine[op] = exp2f( (float)p->v[parameter] / 1200.0f );
@@ -429,6 +490,20 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
     case kParamGlobalVCA:
         p->globalVCA = (float)p->v[parameter] * 0.01f;
         break;
+
+    // Operator Level CV Depth
+    case kParamOp1LevelCVDepth:
+        p->opLevelCVDepth[0] = (float)p->v[parameter] * 0.01f;
+        break;
+    case kParamOp2LevelCVDepth:
+        p->opLevelCVDepth[1] = (float)p->v[parameter] * 0.01f;
+        break;
+    case kParamOp3LevelCVDepth:
+        p->opLevelCVDepth[2] = (float)p->v[parameter] * 0.01f;
+        break;
+    case kParamOp4LevelCVDepth:
+        p->opLevelCVDepth[3] = (float)p->v[parameter] * 0.01f;
+        break;
     }
 }
 
@@ -457,17 +532,17 @@ static void step(
     const float* cvSync     = p->v[kParamSyncCV]     ? busFrames + (p->v[kParamSyncCV] - 1) * numFrames     : NULL;
     const float* cvGlobalVCA= p->v[kParamGlobalVCACV]? busFrames + (p->v[kParamGlobalVCACV] - 1) * numFrames: NULL;
 
-    const float* cvAM[4];
+    const float* cvLevel[4];
     const float* cvPM[4];
     const float* cvWarp[4];
     const float* cvFold[4];
     for ( int op = 0; op < 4; ++op )
     {
         int16_t bus;
-        bus = p->v[opAMCV(op)];   cvAM[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
-        bus = p->v[opPMCV(op)];   cvPM[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
-        bus = p->v[opWarpCV(op)]; cvWarp[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
-        bus = p->v[opFoldCV(op)]; cvFold[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opLevelCV(op)]; cvLevel[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opPMCV(op)];    cvPM[op]     = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opWarpCV(op)];  cvWarp[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFoldCV(op)];  cvFold[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
     }
 
     // Sync state (edge detection)
@@ -481,7 +556,7 @@ static void step(
         if ( p->opFreqMode[op] == 0 )  // Ratio
             opFreq[op] = four::calc_frequency_ratio( base, p->opCoarse[op], p->opFine[op] );
         else  // Fixed
-            opFreq[op] = four::calc_frequency_fixed( p->opCoarse[op], p->opFine[op] );
+            opFreq[op] = four::calc_frequency_fixed( p->opFixedHz[op], p->opFine[op] );
     }
 
     for ( int i = 0; i < numFrames; ++i )
@@ -524,6 +599,20 @@ static void step(
         if ( cvXM )
             xm = fminf( 1.0f, fmaxf( 0.0f, xm + cvXM[i] * 0.2f ) );
 
+        // Compute effective operator levels with CV modulation
+        float effectiveLevel[4];
+        for ( int op = 0; op < 4; ++op )
+        {
+            effectiveLevel[op] = p->opLevel[op];
+            if ( cvLevel[op] )
+            {
+                // CV is ±1.0, scale by depth and 0.2 factor for useful range
+                float cvContribution = cvLevel[op][i] * p->opLevelCVDepth[op] * 0.2f;
+                effectiveLevel[op] += cvContribution;
+                effectiveLevel[op] = fmaxf( 0.0f, fminf( 1.0f, effectiveLevel[op] ) );
+            }
+        }
+
         // --- Process operators with optional oversampling ---
         float outputSample = 0.0f;
 
@@ -537,7 +626,7 @@ static void step(
                 float inc = opFreq[op] / effectiveSampleRate;
 
                 // Gather modulation from algorithm routing
-                float pm = four::gather_modulation( op, opOut, p->opLevel, xm, algo );
+                float pm = four::gather_modulation( op, opOut, effectiveLevel, xm, algo );
 
                 // Self-feedback
                 pm += four::calc_feedback( p->prevOutput[op], p->opFeedback[op] );
@@ -582,16 +671,12 @@ static void step(
                 if ( fold > 0.0f )
                     sample = four::wave_fold( sample, fold, p->opFoldType[op] );
 
-                // AM CV
-                if ( cvAM[op] )
-                    sample *= fmaxf( 0.0f, 1.0f + cvAM[op][i] );
-
                 opOut[op] = sample;
                 p->prevOutput[op] = sample;
             }
 
             // --- Sum carriers ---
-            float subSample = four::sum_carriers( opOut, p->opLevel, algo );
+            float subSample = four::sum_carriers( opOut, effectiveLevel, algo );
 
             // Global VCA with CV
             float vca = p->globalVCA;
