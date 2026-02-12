@@ -11,6 +11,67 @@ namespace four {
 
 static constexpr float TWO_PI = 6.283185307179586f;
 
+// Denormal protection: flush subnormals to zero
+inline void flush_denormal( float& x )
+{
+    if ( fabsf( x ) < 1e-10f )
+        x = 0.0f;
+}
+
+// DC blocker: 1-pole highpass filter at ~20Hz
+// state: previous input sample, returns output
+struct DCBlocker
+{
+    float prevInput = 0.0f;
+    float prevOutput = 0.0f;
+    float R = 0.999f;  // Pole for ~20Hz at 48kHz
+
+    float process( float input )
+    {
+        float output = input - prevInput + R * prevOutput;
+        prevInput = input;
+        prevOutput = output;
+        flush_denormal( output );
+        return output;
+    }
+};
+
+// Half-band FIR downsampling filter (7-tap, ~30dB stopband)
+// Coefficients for symmetric FIR: [c0, 0, c1, 0.5, c1, 0, c0]
+struct HalfbandDownsampler
+{
+    // Halfband coefficients (7 non-zero taps)
+    static constexpr float c0 = 0.033718f;
+    static constexpr float c1 = -0.125f;
+    static constexpr float c2 = 0.3125f;   // Center tap = 0.5
+
+    float buffer[8] = {0};  // Circular buffer (power of 2 for fast wrap)
+    int index = 0;
+
+    float process( float input )
+    {
+        buffer[index] = input;
+        index = ( index + 1 ) & 7;  // Wrap 0-7
+
+        // Halfband FIR: [c0, 0, c1, 0.5, c1, 0, c0]
+        // Odd taps are zero, so we skip them
+        int i0 = ( index - 1 ) & 7;
+        int i1 = ( index - 3 ) & 7;
+        int i2 = ( index - 4 ) & 7;
+        int i3 = ( index - 5 ) & 7;
+        int i4 = ( index - 7 ) & 7;
+
+        float sum = c0 * ( buffer[i0] + buffer[i4] )
+                  + c1 * ( buffer[i1] + buffer[i3] )
+                  + 0.5f * buffer[i2];
+
+        flush_denormal( sum );
+        return sum;
+    }
+};
+
+// Simple 2× downsampler (half-band average) - LOW QUALITY
+
 // Compute sine from normalized phase [0, 1)
 inline float oscillator_sine( float phase )
 {
@@ -126,7 +187,8 @@ inline float fold_asymmetric( float x )
 
 // Wave fold: applies drive based on fold amount, then folds
 // input: signal [-1, 1], amount: 0.0-1.0, type: 0=sym, 1=asym, 2=soft
-inline float wave_fold( float input, float amount, int type )
+// phase, dt: for BLEP correction (pass 0, 0 if not using)
+inline float wave_fold( float input, float amount, int type, float phase = 0, float dt = 0 )
 {
     if ( amount <= 0.0f )
         return input;

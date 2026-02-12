@@ -33,6 +33,7 @@ struct _fourAlgorithm : public _NT_algorithm
     uint8_t algorithm;       // 0-10
     uint8_t oversample;      // 0=off, 1=2x
     uint8_t polyblep;        // 0=off, 1=on
+    uint8_t filterQuality;   // 0=low, 1=high
 
     // MIDI state
     float baseFrequency;     // Hz, from V/OCT or MIDI
@@ -42,7 +43,9 @@ struct _fourAlgorithm : public _NT_algorithm
     uint8_t midiChannel;     // 0-15
 
     // Oversampling state
-    float dsBuffer[2];       // Downsample filter state
+    float dsBuffer[2];       // Downsample filter state (low quality)
+    four::HalfbandDownsampler firDownsampler;  // FIR filter (high quality)
+    four::DCBlocker dcBlocker;                // DC blocker
 
     _fourAlgorithm()
     {
@@ -68,8 +71,9 @@ struct _fourAlgorithm : public _NT_algorithm
         globalVCA = 1.0f;
         fineTune = 1.0f;
         algorithm = 0;
-        oversample = 0;
-        polyblep = 0;
+        oversample = 1;            // Default ON
+        polyblep = 1;             // Default ON
+        filterQuality = 1;         // Default High
         baseFrequency = 261.63f;  // C4
         pitchBendFactor = 1.0f;
         midiNote = 60;
@@ -93,6 +97,7 @@ enum {
     kParamFineTune,
     kParamOversampling,
     kParamPolyBLEP,
+    kParamFilterQuality,
     kParamMidiChannel,
     kParamGlobalVCA,
     kParamVersion,
@@ -240,6 +245,7 @@ static const char* ratioStrings[] = {
 static const char* offOnStrings[]     = { "Off","On", NULL };
 static const char* off2xStrings[]     = { "Off","2x", NULL };
 static const char* freqModeStrings[]  = { "Ratio","Fixed", NULL };
+static const char* filterQualityStrings[] = { "Low","High", NULL };
 static const char* foldTypeStrings[]  = { "Symmetric","Asymmetric","Soft Clip", NULL };
 
 static const char* versionStrings[] = { FOUR_VERSION, NULL };
@@ -266,9 +272,10 @@ static _NT_parameter parameters[] = {
     { "Algorithm",    0,   10,   0,   kNT_unitEnum,    0, algorithmStrings },
     { "XM",           0,  100,   0,   kNT_unitPercent, 0, NULL },
     { "Fine Tune",  -100, 100,   0,   kNT_unitCents,   0, NULL },
-    { "Oversampling", 0,    1,   0,   kNT_unitEnum,    0, off2xStrings },
-    { "PolyBLEP",     0,    1,   0,   kNT_unitEnum,    0, offOnStrings },
-    { "MIDI Channel", 1,   16,   1,   kNT_unitNone,    0, NULL },
+    { "Oversampling",    0,    1,   1,   kNT_unitEnum,    0, off2xStrings },
+    { "PolyBLEP",       0,    1,   1,   kNT_unitEnum,    0, offOnStrings },
+    { "Filter Quality",  0,    1,   1,   kNT_unitEnum,    0, filterQualityStrings },
+    { "MIDI Channel",   1,   16,   1,   kNT_unitNone,    0, NULL },
     { "Global VCA",   0,  100, 100,   kNT_unitPercent, 0, NULL },
 
     // Version (read-only)
@@ -333,8 +340,8 @@ static _NT_parameter parameters[] = {
 static const uint8_t pageIO[] = { kParamOutput, kParamOutputMode };
 static const uint8_t pageGlobal[] = {
     kParamAlgorithm, kParamXM, kParamFineTune,
-    kParamOversampling, kParamPolyBLEP, kParamGlobalVCA,
-    kParamVersion
+    kParamOversampling, kParamPolyBLEP, kParamFilterQuality,
+    kParamGlobalVCA, kParamVersion
 };
 static const uint8_t pageMIDI[] = { kParamMidiChannel };
 
@@ -542,6 +549,9 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
         break;
     case kParamPolyBLEP:
         p->polyblep = p->v[parameter];
+        break;
+    case kParamFilterQuality:
+        p->filterQuality = p->v[parameter];
         break;
     case kParamMidiChannel:
         p->midiChannel = p->v[parameter] - 1;  // 1-16 → 0-15
@@ -789,10 +799,25 @@ static void step(
             if ( actualRate == 1 )
                 outputSample = subSample;
             else if ( os == 0 )
-                p->dsBuffer[0] = subSample;
+            {
+                // First oversampled sample - store
+                if ( p->filterQuality )
+                    p->firDownsampler.process( subSample );  // Prime FIR
+                else
+                    p->dsBuffer[0] = subSample;
+            }
             else
-                outputSample = four::downsample_2x( p->dsBuffer[0], subSample );
+            {
+                // Second oversampled sample - downsample and output
+                if ( p->filterQuality )
+                    outputSample = p->firDownsampler.process( subSample );
+                else
+                    outputSample = four::downsample_2x( p->dsBuffer[0], subSample );
+            }
         }
+
+        // Apply DC blocking to final output
+        outputSample = p->dcBlocker.process( outputSample );
 
         // Output
         if ( replace )
