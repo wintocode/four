@@ -36,41 +36,7 @@ struct DCBlocker
     }
 };
 
-// Half-band FIR downsampling filter (7-tap, ~30dB stopband)
-// Coefficients for symmetric FIR: [c0, 0, c1, 0.5, c1, 0, c0]
-struct HalfbandDownsampler
-{
-    // Halfband coefficients (7 non-zero taps)
-    static constexpr float c0 = 0.033718f;
-    static constexpr float c1 = -0.125f;
-    static constexpr float c2 = 0.3125f;   // Center tap = 0.5
-
-    float buffer[8] = {0};  // Circular buffer (power of 2 for fast wrap)
-    int index = 0;
-
-    float process( float input )
-    {
-        buffer[index] = input;
-        index = ( index + 1 ) & 7;  // Wrap 0-7
-
-        // Halfband FIR: [c0, 0, c1, 0.5, c1, 0, c0]
-        // Odd taps are zero, so we skip them
-        int i0 = ( index - 1 ) & 7;
-        int i1 = ( index - 3 ) & 7;
-        int i2 = ( index - 4 ) & 7;
-        int i3 = ( index - 5 ) & 7;
-        int i4 = ( index - 7 ) & 7;
-
-        float sum = c0 * ( buffer[i0] + buffer[i4] )
-                  + c1 * ( buffer[i1] + buffer[i3] )
-                  + 0.5f * buffer[i2];
-
-        flush_denormal( sum );
-        return sum;
-    }
-};
-
-// Simple 2× downsampler (half-band average) - LOW QUALITY
+// Simple 2× downsampler (half-band average)
 
 // Compute sine from normalized phase [0, 1)
 inline float oscillator_sine( float phase )
