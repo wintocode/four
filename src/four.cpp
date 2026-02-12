@@ -95,6 +95,7 @@ enum {
     kParamPolyBLEP,
     kParamMidiChannel,
     kParamGlobalVCA,
+    kParamVersion,
 
     // Operator 1
     kParamOp1FreqMode,
@@ -241,6 +242,8 @@ static const char* off2xStrings[]     = { "Off","2x", NULL };
 static const char* freqModeStrings[]  = { "Ratio","Fixed", NULL };
 static const char* foldTypeStrings[]  = { "Symmetric","Asymmetric","Soft Clip", NULL };
 
+static const char* versionStrings[] = { FOUR_VERSION, NULL };
+
 // --- Parameter definitions ---
 
 // Macro for one operator's 9 parameters
@@ -267,6 +270,9 @@ static _NT_parameter parameters[] = {
     { "PolyBLEP",     0,    1,   0,   kNT_unitEnum,    0, offOnStrings },
     { "MIDI Channel", 1,   16,   1,   kNT_unitNone,    0, NULL },
     { "Global VCA",   0,  100, 100,   kNT_unitPercent, 0, NULL },
+
+    // Version (read-only)
+    { "Version",      0,    0,   0,   kNT_unitEnum,    0, versionStrings },
 
     // Operators
     OP_PARAMS(1)
@@ -327,7 +333,8 @@ static _NT_parameter parameters[] = {
 static const uint8_t pageIO[] = { kParamOutput, kParamOutputMode };
 static const uint8_t pageGlobal[] = {
     kParamAlgorithm, kParamXM, kParamFineTune,
-    kParamOversampling, kParamPolyBLEP, kParamGlobalVCA
+    kParamOversampling, kParamPolyBLEP, kParamGlobalVCA,
+    kParamVersion
 };
 static const uint8_t pageMIDI[] = { kParamMidiChannel };
 
@@ -862,7 +869,7 @@ static void midiMessage(
 static const _NT_factory factory = {
     .guid = NT_MULTICHAR( 'F', 'o', 'u', 'r' ),
     .name = "Four",
-    .description = "4-op FM synthesizer",
+    .description = "Four v" FOUR_VERSION " - 4-op FM synthesizer",
     .numSpecifications = 0,
     .specifications = NULL,
     .calculateStaticRequirements = NULL,
@@ -884,6 +891,13 @@ static const _NT_factory factory = {
     .parameterUiPrefix = NULL,
     .parameterString = NULL,
 };
+
+// --- Version ---
+
+extern "C" const char* four_getVersion()
+{
+    return "Four v" FOUR_VERSION;
+}
 
 // --- Entry point ---
 

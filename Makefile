@@ -2,11 +2,13 @@ NT_API_PATH := distingNT_API
 INCLUDE_PATH := $(NT_API_PATH)/include
 SRC := src/four.cpp
 OUTPUT := plugins/four.o
+VERSION := $(shell cat VERSION)
 
 CC := arm-none-eabi-c++
 CFLAGS := -std=c++11 -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard \
           -mthumb -fno-rtti -fno-exceptions -Os -fPIC -Wall \
-          -I$(INCLUDE_PATH) -Isrc
+          -I$(INCLUDE_PATH) -Isrc \
+          -DFOUR_VERSION='"$(VERSION)"'
 
 all: $(OUTPUT)
 
