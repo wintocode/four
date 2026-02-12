@@ -19,7 +19,7 @@ $(OUTPUT): $(SRC) src/dsp.h VERSION
 
 $(MANIFEST): VERSION
 	mkdir -p plugins
-	@echo '{"name": "Four", "guid": "9df75c7a-87db-4d63-b414-24c50939029b", "version": "$(VERSION)", "author": "wintoid", "description": "Four - 4-op FM synthesizer for Disting NT", "tags": ["instrument", "synth", "FM"]}' > $@
+	@echo '{"name": "Four", "guid": "Four", "version": "$(VERSION)", "author": "wintoid", "description": "Four - 4-op FM synthesizer for Disting NT", "tags": ["instrument", "synth", "FM"]}' > $@
 
 clean:
 	rm -f $(OUTPUT) $(MANIFEST)
