@@ -8,12 +8,12 @@ VERSION := $(shell cat VERSION)
 CC := arm-none-eabi-c++
 CFLAGS := -std=c++11 -mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard \
           -mthumb -fno-rtti -fno-exceptions -Os -fPIC -Wall \
-          -I$(INCLUDE_PATH) -Isrc \
+          -I$(INCLUDE_PATH) \
           -DFOUR_VERSION='"$(VERSION)"'
 
 all: $(OUTPUT) $(MANIFEST)
 
-$(OUTPUT): $(SRC) src/dsp.h VERSION
+$(OUTPUT): $(SRC) dsp.h VERSION
 	mkdir -p plugins
 	$(CC) $(CFLAGS) -c -o $@ $<
 
