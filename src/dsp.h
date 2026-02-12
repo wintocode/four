@@ -187,8 +187,7 @@ inline float fold_asymmetric( float x )
 
 // Wave fold: applies drive based on fold amount, then folds
 // input: signal [-1, 1], amount: 0.0-1.0, type: 0=sym, 1=asym, 2=soft
-// phase, dt: for BLEP correction (pass 0, 0 if not using)
-inline float wave_fold( float input, float amount, int type, float phase = 0, float dt = 0 )
+inline float wave_fold( float input, float amount, int type )
 {
     if ( amount <= 0.0f )
         return input;
