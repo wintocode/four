@@ -871,7 +871,7 @@ static void midiMessage(
 // --- Factory ---
 
 static const _NT_factory factory = {
-    .guid = NT_MULTICHAR( 'F', 'o', 'u', 'r' ),
+    .guid = NT_MULTICHAR('F','o','u','r'),
     .name = "Four",
     .description = "Four v" FOUR_VERSION " - 4-op FM synthesizer",
     .numSpecifications = 0,
