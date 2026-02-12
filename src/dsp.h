@@ -149,8 +149,8 @@ struct Algorithm
     bool carrier[4];    // carrier[op]: outputs to mix
 };
 
-// 8 DX9-style algorithms (0-indexed)
-static const Algorithm algorithms[8] = {
+// 11 FM algorithms (0-indexed)
+static const Algorithm algorithms[11] = {
     // Algo 1: 4→3→2→1, carriers: {1}
     { { {0,0,0,0}, {1,0,0,0}, {0,1,0,0}, {0,0,1,0} },
       {true, false, false, false} },
@@ -182,6 +182,18 @@ static const Algorithm algorithms[8] = {
     // Algo 8: 1+2+3+4, carriers: all
     { { {0,0,0,0}, {0,0,0,0}, {0,0,0,0}, {0,0,0,0} },
       {true, true, true, true} },
+
+    // Algo 9: 4→3→(1,2), carriers: {1, 2}
+    { { {0,0,0,0}, {0,0,0,0}, {1,1,0,0}, {0,0,1,0} },
+      {true, true, false, false} },
+
+    // Algo 10: (3+4)→(1,2), carriers: {1, 2}
+    { { {0,0,0,0}, {0,0,0,0}, {1,1,0,0}, {1,1,0,0} },
+      {true, true, false, false} },
+
+    // Algo 11: (2+3+4)→1, carriers: {1}
+    { { {0,0,0,0}, {1,0,0,0}, {1,0,0,0}, {1,0,0,0} },
+      {true, false, false, false} },
 };
 
 // Gather phase modulation for a target operator from all sources

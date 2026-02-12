@@ -293,6 +293,48 @@ TEST(gather_modulation)
     ASSERT_NEAR( pm, 0.28f, 1e-5f );
 }
 
+TEST(algorithm_9_serial_split)
+{
+    // Algo 9: 4→3→(1,2), carriers: {1, 2}
+    const four::Algorithm& a = four::algorithms[8];
+    ASSERT( a.mod[3][2] );   // 4→3
+    ASSERT( a.mod[2][0] );   // 3→1
+    ASSERT( a.mod[2][1] );   // 3→2
+    ASSERT( !a.mod[3][0] );  // 4 does NOT directly mod 1
+    ASSERT( !a.mod[3][1] );  // 4 does NOT directly mod 2
+    ASSERT( a.carrier[0] );  // op1 carrier
+    ASSERT( a.carrier[1] );  // op2 carrier
+    ASSERT( !a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_10_parallel_to_pair)
+{
+    // Algo 10: (3+4)→(1,2), carriers: {1, 2}
+    const four::Algorithm& a = four::algorithms[9];
+    ASSERT( a.mod[2][0] );   // 3→1
+    ASSERT( a.mod[2][1] );   // 3→2
+    ASSERT( a.mod[3][0] );   // 4→1
+    ASSERT( a.mod[3][1] );   // 4→2
+    ASSERT( a.carrier[0] );  // op1 carrier
+    ASSERT( a.carrier[1] );  // op2 carrier
+    ASSERT( !a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_11_three_to_one)
+{
+    // Algo 11: (2+3+4)→1, carriers: {1}
+    const four::Algorithm& a = four::algorithms[10];
+    ASSERT( a.mod[1][0] );   // 2→1
+    ASSERT( a.mod[2][0] );   // 3→1
+    ASSERT( a.mod[3][0] );   // 4→1
+    ASSERT( a.carrier[0] );  // op1 carrier
+    ASSERT( !a.carrier[1] );
+    ASSERT( !a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
 // --- Task 16: 2x Oversampling ---
 
 TEST(downsample_2x)
@@ -372,6 +414,9 @@ int main()
     run_process_algorithm_8_sum();
     run_process_algorithm_1_single_carrier();
     run_gather_modulation();
+    run_algorithm_9_serial_split();
+    run_algorithm_10_parallel_to_pair();
+    run_algorithm_11_three_to_one();
     run_downsample_2x();
     run_polyblep_correction_near_zero();
     run_polyblep_correction_far_from_edge();
