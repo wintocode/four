@@ -36,6 +36,21 @@ cd tests && make run
 
 See [DESIGN.md](docs/DESIGN.md) for full design details.
 
+## Versioning
+
+This project uses [Semantic Versioning](https://semver.org).
+
+- **MAJOR**: Breaking changes to preset compatibility/API
+- **MINOR**: New features
+- **PATCH**: Bug fixes
+
+Pre-release identifiers indicate stability:
+- `-beta.N`: Testing phase, may have bugs
+- `-rc.N`: Release candidate, mostly stable
+- No suffix: Stable release
+
+Example: `1.1.0-beta.2` → `1.1.0-rc.1` → `1.1.0`
+
 ## Author
 
 wintocode
