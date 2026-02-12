@@ -1,6 +1,6 @@
 NT_API_PATH := distingNT_API
 INCLUDE_PATH := $(NT_API_PATH)/include
-SRC := src/four.cpp
+SRC := four.cpp
 OUTPUT := plugins/four.o
 MANIFEST := plugins/plugin.json
 VERSION := $(shell cat VERSION)

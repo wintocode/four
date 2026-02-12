@@ -2,7 +2,7 @@
 #include <math.h>
 #include <string.h>
 #include <distingnt/api.h>
-#include "dsp.h"
+#include "src/dsp.h"
 
 // --- Algorithm struct ---
 
