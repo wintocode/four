@@ -4,6 +4,8 @@
 #include <distingnt/api.h>
 #include "dsp.h"
 
+static const float kInv127 = 1.0f / 127.0f;
+
 // --- Algorithm struct ---
 
 struct _fourAlgorithm : public _NT_algorithm
@@ -18,6 +20,8 @@ struct _fourAlgorithm : public _NT_algorithm
     float opPMCVDepth[4];    // 0.0-1.0
     float opWarpCVDepth[4];  // 0.0-1.0
     float opFoldCVDepth[4];  // 0.0-1.0
+    float opFeedbackCVDepth[4]; // 0.0-1.0
+    float opFixedHzCVDepth[4];  // 0.0-1.0
     float opFeedback[4];     // 0.0-1.0
     float opWarp[4];         // 0.0-1.0
     float opFold[4];         // 0.0-1.0
@@ -56,6 +60,8 @@ struct _fourAlgorithm : public _NT_algorithm
             opPMCVDepth[i] = 0.0f;
             opWarpCVDepth[i] = 0.0f;
             opFoldCVDepth[i] = 0.0f;
+            opFeedbackCVDepth[i] = 0.0f;
+            opFixedHzCVDepth[i] = 0.0f;
             opFeedback[i] = 0.0f;
             opWarp[i] = 0.0f;
             opFold[i] = 0.0f;
@@ -189,6 +195,56 @@ enum {
     kParamOp3FoldCV,
     kParamOp4FoldCV,
 
+    // Feedback CV Depth
+    kParamOp1FeedbackCVDepth,
+    kParamOp2FeedbackCVDepth,
+    kParamOp3FeedbackCVDepth,
+    kParamOp4FeedbackCVDepth,
+
+    // Fixed Hz CV Depth
+    kParamOp1FixedHzCVDepth,
+    kParamOp2FixedHzCVDepth,
+    kParamOp3FixedHzCVDepth,
+    kParamOp4FixedHzCVDepth,
+
+    // Feedback CV Inputs
+    kParamOp1FeedbackCV,
+    kParamOp2FeedbackCV,
+    kParamOp3FeedbackCV,
+    kParamOp4FeedbackCV,
+
+    // Fixed Hz CV Inputs
+    kParamOp1FixedHzCV,
+    kParamOp2FixedHzCV,
+    kParamOp3FixedHzCV,
+    kParamOp4FixedHzCV,
+
+    // CV-over-CV-Depth bus selectors
+    kParamOp1LevelCVDepthCV,
+    kParamOp2LevelCVDepthCV,
+    kParamOp3LevelCVDepthCV,
+    kParamOp4LevelCVDepthCV,
+    kParamOp1PMCVDepthCV,
+    kParamOp2PMCVDepthCV,
+    kParamOp3PMCVDepthCV,
+    kParamOp4PMCVDepthCV,
+    kParamOp1WarpCVDepthCV,
+    kParamOp2WarpCVDepthCV,
+    kParamOp3WarpCVDepthCV,
+    kParamOp4WarpCVDepthCV,
+    kParamOp1FoldCVDepthCV,
+    kParamOp2FoldCVDepthCV,
+    kParamOp3FoldCVDepthCV,
+    kParamOp4FoldCVDepthCV,
+    kParamOp1FeedbackCVDepthCV,
+    kParamOp2FeedbackCVDepthCV,
+    kParamOp3FeedbackCVDepthCV,
+    kParamOp4FeedbackCVDepthCV,
+    kParamOp1FixedHzCVDepthCV,
+    kParamOp2FixedHzCVDepthCV,
+    kParamOp3FixedHzCVDepthCV,
+    kParamOp4FixedHzCVDepthCV,
+
     kNumParams
 };
 
@@ -211,6 +267,15 @@ static inline int opLevelCV( int op ) { return kParamOp1LevelCV + op; }
 static inline int opPMCV( int op ) { return kParamOp1PMCV + op; }
 static inline int opWarpCV( int op ) { return kParamOp1WarpCV + op; }
 static inline int opFoldCV( int op ) { return kParamOp1FoldCV + op; }
+static inline int opFeedbackCV( int op ) { return kParamOp1FeedbackCV + op; }
+static inline int opFixedHzCV( int op ) { return kParamOp1FixedHzCV + op; }
+// Helper: CV-over-CV-depth param index for operator N (0-based)
+static inline int opLevelCVDepthCV( int op ) { return kParamOp1LevelCVDepthCV + op; }
+static inline int opPMCVDepthCV( int op ) { return kParamOp1PMCVDepthCV + op; }
+static inline int opWarpCVDepthCV( int op ) { return kParamOp1WarpCVDepthCV + op; }
+static inline int opFoldCVDepthCV( int op ) { return kParamOp1FoldCVDepthCV + op; }
+static inline int opFeedbackCVDepthCV( int op ) { return kParamOp1FeedbackCVDepthCV + op; }
+static inline int opFixedHzCVDepthCV( int op ) { return kParamOp1FixedHzCVDepthCV + op; }
 
 // --- Enum strings ---
 
@@ -253,10 +318,10 @@ static const char* versionStrings[] = { FOUR_VERSION, NULL };
     { "Op" #n " Coarse",    0, 64, 3, kNT_unitEnum, 0, ratioStrings }, \
     { "Op" #n " Fixed Hz",  1, 9999, 440, kNT_unitHz, 0, NULL }, \
     { "Op" #n " Fine",   -100, 100, 0, kNT_unitCents, 0, NULL }, \
-    { "Op" #n " Level",     0, 100, 100, kNT_unitPercent, 0, NULL }, \
-    { "Op" #n " Feedback",  0, 100, 0, kNT_unitPercent, 0, NULL }, \
-    { "Op" #n " Warp",      0, 100, 0, kNT_unitPercent, 0, NULL }, \
-    { "Op" #n " Fold",      0, 100, 0, kNT_unitPercent, 0, NULL }, \
+    { "Op" #n " Level",     0, 127, 127, kNT_unitNone, 0, NULL }, \
+    { "Op" #n " Feedback",  0, 127, 0, kNT_unitNone, 0, NULL }, \
+    { "Op" #n " Warp",      0, 127, 0, kNT_unitNone, 0, NULL }, \
+    { "Op" #n " Fold",      0, 127, 0, kNT_unitNone, 0, NULL }, \
     { "Op" #n " Fold Type", 0, 2, 0, kNT_unitEnum, 0, foldTypeStrings },
 
 static _NT_parameter parameters[] = {
@@ -265,12 +330,12 @@ static _NT_parameter parameters[] = {
 
     // Global
     { "Algorithm",    0,   10,   0,   kNT_unitEnum,    0, algorithmStrings },
-    { "XM",           0,  100,   0,   kNT_unitPercent, 0, NULL },
+    { "XM",           0,  127,   0,   kNT_unitNone, 0, NULL },
     { "Fine Tune",  -100, 100,   0,   kNT_unitCents,   0, NULL },
     { "Oversampling",    0,    1,   1,   kNT_unitEnum,    0, off2xStrings },
     { "PolyBLEP",       0,    1,   1,   kNT_unitEnum,    0, offOnStrings },
     { "MIDI Channel",   1,   16,   1,   kNT_unitNone,    0, NULL },
-    { "Global VCA",   0,  100, 100,   kNT_unitPercent, 0, NULL },
+    { "Global VCA",   0,  127, 127,   kNT_unitNone, 0, NULL },
 
     // Version (read-only)
     { "Version",      0,    0,   0,   kNT_unitEnum,    0, versionStrings },
@@ -282,28 +347,28 @@ static _NT_parameter parameters[] = {
     OP_PARAMS(4)
 
     // Operator Level CV Depth
-    { "Op1 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op2 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op3 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op4 Level CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+    { "Op1 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op2 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op3 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op4 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
 
     // Operator PM CV Depth
-    { "Op1 PM CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op2 PM CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op3 PM CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op4 PM CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+    { "Op1 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op2 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op3 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op4 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
 
     // Operator Warp CV Depth
-    { "Op1 Warp CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op2 Warp CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op3 Warp CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op4 Warp CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+    { "Op1 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op2 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op3 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op4 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
 
     // Operator Fold CV Depth
-    { "Op1 Fold CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op2 Fold CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op3 Fold CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
-    { "Op4 Fold CV Depth", 0, 100, 0, kNT_unitPercent, 0, NULL },
+    { "Op1 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op2 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op3 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op4 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
 
     // CV Inputs
     NT_PARAMETER_CV_INPUT( "V/OCT CV",       0, 0 )
@@ -327,6 +392,56 @@ static _NT_parameter parameters[] = {
     NT_PARAMETER_CV_INPUT( "Op2 Fold CV",    0, 0 )
     NT_PARAMETER_CV_INPUT( "Op3 Fold CV",    0, 0 )
     NT_PARAMETER_CV_INPUT( "Op4 Fold CV",    0, 0 )
+
+    // Feedback CV Depth
+    { "Op1 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op2 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op3 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op4 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+
+    // Fixed Hz CV Depth
+    { "Op1 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op2 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op3 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op4 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+
+    // Feedback CV Inputs
+    NT_PARAMETER_CV_INPUT( "Op1 Feedback CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Feedback CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Feedback CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Feedback CV", 0, 0 )
+
+    // Fixed Hz CV Inputs
+    NT_PARAMETER_CV_INPUT( "Op1 Fixed Hz CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Fixed Hz CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Fixed Hz CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Fixed Hz CV", 0, 0 )
+
+    // CV-over-CV-Depth bus selectors
+    NT_PARAMETER_CV_INPUT( "Op1 Level Depth CV",    0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Level Depth CV",    0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Level Depth CV",    0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Level Depth CV",    0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op1 PM Depth CV",       0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 PM Depth CV",       0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 PM Depth CV",       0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 PM Depth CV",       0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op1 Warp Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Warp Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Warp Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Warp Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op1 Fold Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Fold Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Fold Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Fold Depth CV",     0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op1 Feedback Depth CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Feedback Depth CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Feedback Depth CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Feedback Depth CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op1 Fixed Hz Depth CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op2 Fixed Hz Depth CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op3 Fixed Hz Depth CV", 0, 0 )
+    NT_PARAMETER_CV_INPUT( "Op4 Fixed Hz Depth CV", 0, 0 )
 };
 
 // --- Parameter pages ---
@@ -353,9 +468,17 @@ static const uint8_t pageCVGlobal[] = {
 #define CV_PAGE(n) \
     static const uint8_t pageCVOp##n[] = { \
         kParamOp##n##LevelCV, kParamOp##n##LevelCVDepth, \
+        kParamOp##n##LevelCVDepthCV, \
         kParamOp##n##PMCV, kParamOp##n##PMCVDepth, \
+        kParamOp##n##PMCVDepthCV, \
         kParamOp##n##WarpCV, kParamOp##n##WarpCVDepth, \
-        kParamOp##n##FoldCV, kParamOp##n##FoldCVDepth \
+        kParamOp##n##WarpCVDepthCV, \
+        kParamOp##n##FoldCV, kParamOp##n##FoldCVDepth, \
+        kParamOp##n##FoldCVDepthCV, \
+        kParamOp##n##FeedbackCV, kParamOp##n##FeedbackCVDepth, \
+        kParamOp##n##FeedbackCVDepthCV, \
+        kParamOp##n##FixedHzCV, kParamOp##n##FixedHzCVDepth, \
+        kParamOp##n##FixedHzCVDepthCV \
     };
 CV_PAGE(1) CV_PAGE(2) CV_PAGE(3) CV_PAGE(4)
 
@@ -381,8 +504,8 @@ static const _NT_parameterPages parameterPages = {
 
 // --- MIDI CC mapping ---
 
-// CC 14-72 → 59 value parameters (excludes CV bus selectors)
-// 7 global + 36 per-op (9×4) + 16 CV depths (4×4)
+// CC 14-80 → 67 value parameters (excludes CV bus selectors)
+// 7 global + 36 per-op (9×4) + 16 CV depths (4×4) + 8 new CV depths (Feedback + Fixed Hz)
 static const int8_t ccToParam[128] = {
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,                     // 0-13
     kParamAlgorithm, kParamXM, kParamFineTune,                      // 14-16
@@ -408,7 +531,11 @@ static const int8_t ccToParam[128] = {
     kParamOp3WarpCVDepth, kParamOp4WarpCVDepth,                    // 67-68
     kParamOp1FoldCVDepth, kParamOp2FoldCVDepth,                    // 69-70
     kParamOp3FoldCVDepth, kParamOp4FoldCVDepth,                    // 71-72
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 73-88
+    kParamOp1FeedbackCVDepth, kParamOp2FeedbackCVDepth,            // 73-74
+    kParamOp3FeedbackCVDepth, kParamOp4FeedbackCVDepth,            // 75-76
+    kParamOp1FixedHzCVDepth, kParamOp2FixedHzCVDepth,              // 77-78
+    kParamOp3FixedHzCVDepth, kParamOp4FixedHzCVDepth,              // 79-80
+    -1,-1,-1,-1,-1,-1,-1,-1,                                       // 81-88
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 89-104
     -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 105-120
     -1,-1,-1,-1,-1,-1,-1                                           // 121-127
@@ -507,16 +634,16 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
                 p->opFine[op] = exp2f( (float)p->v[parameter] / 1200.0f );
                 break;
             case kOpLevel:
-                p->opLevel[op] = (float)p->v[parameter] * 0.01f;
+                p->opLevel[op] = (float)p->v[parameter] * kInv127;
                 break;
             case kOpFeedback:
-                p->opFeedback[op] = (float)p->v[parameter] * 0.01f;
+                p->opFeedback[op] = (float)p->v[parameter] * kInv127;
                 break;
             case kOpWarp:
-                p->opWarp[op] = (float)p->v[parameter] * 0.01f;
+                p->opWarp[op] = (float)p->v[parameter] * kInv127;
                 break;
             case kOpFold:
-                p->opFold[op] = (float)p->v[parameter] * 0.01f;
+                p->opFold[op] = (float)p->v[parameter] * kInv127;
                 break;
             case kOpFoldType:
                 p->opFoldType[op] = p->v[parameter];
@@ -533,7 +660,7 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
         p->algorithm = p->v[parameter];
         break;
     case kParamXM:
-        p->xm = (float)p->v[parameter] * 0.01f;
+        p->xm = (float)p->v[parameter] * kInv127;
         break;
     case kParamFineTune:
         p->fineTune = exp2f( (float)p->v[parameter] / 1200.0f );
@@ -548,63 +675,91 @@ static void parameterChanged( _NT_algorithm* self, int parameter )
         p->midiChannel = p->v[parameter] - 1;  // 1-16 → 0-15
         break;
     case kParamGlobalVCA:
-        p->globalVCA = (float)p->v[parameter] * 0.01f;
+        p->globalVCA = (float)p->v[parameter] * kInv127;
         break;
 
     // Operator Level CV Depth
     case kParamOp1LevelCVDepth:
-        p->opLevelCVDepth[0] = (float)p->v[parameter] * 0.01f;
+        p->opLevelCVDepth[0] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp2LevelCVDepth:
-        p->opLevelCVDepth[1] = (float)p->v[parameter] * 0.01f;
+        p->opLevelCVDepth[1] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp3LevelCVDepth:
-        p->opLevelCVDepth[2] = (float)p->v[parameter] * 0.01f;
+        p->opLevelCVDepth[2] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp4LevelCVDepth:
-        p->opLevelCVDepth[3] = (float)p->v[parameter] * 0.01f;
+        p->opLevelCVDepth[3] = (float)p->v[parameter] * kInv127;
         break;
 
     // Operator PM CV Depth
     case kParamOp1PMCVDepth:
-        p->opPMCVDepth[0] = (float)p->v[parameter] * 0.01f;
+        p->opPMCVDepth[0] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp2PMCVDepth:
-        p->opPMCVDepth[1] = (float)p->v[parameter] * 0.01f;
+        p->opPMCVDepth[1] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp3PMCVDepth:
-        p->opPMCVDepth[2] = (float)p->v[parameter] * 0.01f;
+        p->opPMCVDepth[2] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp4PMCVDepth:
-        p->opPMCVDepth[3] = (float)p->v[parameter] * 0.01f;
+        p->opPMCVDepth[3] = (float)p->v[parameter] * kInv127;
         break;
 
     // Operator Warp CV Depth
     case kParamOp1WarpCVDepth:
-        p->opWarpCVDepth[0] = (float)p->v[parameter] * 0.01f;
+        p->opWarpCVDepth[0] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp2WarpCVDepth:
-        p->opWarpCVDepth[1] = (float)p->v[parameter] * 0.01f;
+        p->opWarpCVDepth[1] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp3WarpCVDepth:
-        p->opWarpCVDepth[2] = (float)p->v[parameter] * 0.01f;
+        p->opWarpCVDepth[2] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp4WarpCVDepth:
-        p->opWarpCVDepth[3] = (float)p->v[parameter] * 0.01f;
+        p->opWarpCVDepth[3] = (float)p->v[parameter] * kInv127;
         break;
 
     // Operator Fold CV Depth
     case kParamOp1FoldCVDepth:
-        p->opFoldCVDepth[0] = (float)p->v[parameter] * 0.01f;
+        p->opFoldCVDepth[0] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp2FoldCVDepth:
-        p->opFoldCVDepth[1] = (float)p->v[parameter] * 0.01f;
+        p->opFoldCVDepth[1] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp3FoldCVDepth:
-        p->opFoldCVDepth[2] = (float)p->v[parameter] * 0.01f;
+        p->opFoldCVDepth[2] = (float)p->v[parameter] * kInv127;
         break;
     case kParamOp4FoldCVDepth:
-        p->opFoldCVDepth[3] = (float)p->v[parameter] * 0.01f;
+        p->opFoldCVDepth[3] = (float)p->v[parameter] * kInv127;
+        break;
+
+    // Operator Feedback CV Depth
+    case kParamOp1FeedbackCVDepth:
+        p->opFeedbackCVDepth[0] = (float)p->v[parameter] * kInv127;
+        break;
+    case kParamOp2FeedbackCVDepth:
+        p->opFeedbackCVDepth[1] = (float)p->v[parameter] * kInv127;
+        break;
+    case kParamOp3FeedbackCVDepth:
+        p->opFeedbackCVDepth[2] = (float)p->v[parameter] * kInv127;
+        break;
+    case kParamOp4FeedbackCVDepth:
+        p->opFeedbackCVDepth[3] = (float)p->v[parameter] * kInv127;
+        break;
+
+    // Operator Fixed Hz CV Depth
+    case kParamOp1FixedHzCVDepth:
+        p->opFixedHzCVDepth[0] = (float)p->v[parameter] * kInv127;
+        break;
+    case kParamOp2FixedHzCVDepth:
+        p->opFixedHzCVDepth[1] = (float)p->v[parameter] * kInv127;
+        break;
+    case kParamOp3FixedHzCVDepth:
+        p->opFixedHzCVDepth[2] = (float)p->v[parameter] * kInv127;
+        break;
+    case kParamOp4FixedHzCVDepth:
+        p->opFixedHzCVDepth[3] = (float)p->v[parameter] * kInv127;
         break;
     }
 }
@@ -638,13 +793,31 @@ static void step(
     const float* cvPM[4];
     const float* cvWarp[4];
     const float* cvFold[4];
+    const float* cvFeedback[4];
+    const float* cvFixedHz[4];
+    // CV-over-CV-depth buses
+    const float* cvLevelDepth[4];
+    const float* cvPMDepth[4];
+    const float* cvWarpDepth[4];
+    const float* cvFoldDepth[4];
+    const float* cvFeedbackDepth[4];
+    const float* cvFixedHzDepth[4];
     for ( int op = 0; op < 4; ++op )
     {
         int16_t bus;
-        bus = p->v[opLevelCV(op)]; cvLevel[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
-        bus = p->v[opPMCV(op)];    cvPM[op]     = bus ? busFrames + (bus-1)*numFrames : NULL;
-        bus = p->v[opWarpCV(op)];  cvWarp[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
-        bus = p->v[opFoldCV(op)];  cvFold[op]   = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opLevelCV(op)];    cvLevel[op]    = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opPMCV(op)];       cvPM[op]       = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opWarpCV(op)];     cvWarp[op]     = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFoldCV(op)];     cvFold[op]     = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFeedbackCV(op)]; cvFeedback[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFixedHzCV(op)];  cvFixedHz[op]  = bus ? busFrames + (bus-1)*numFrames : NULL;
+        // CV-over-CV-depth
+        bus = p->v[opLevelCVDepthCV(op)];    cvLevelDepth[op]    = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opPMCVDepthCV(op)];       cvPMDepth[op]       = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opWarpCVDepthCV(op)];     cvWarpDepth[op]     = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFoldCVDepthCV(op)];     cvFoldDepth[op]     = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFeedbackCVDepthCV(op)]; cvFeedbackDepth[op] = bus ? busFrames + (bus-1)*numFrames : NULL;
+        bus = p->v[opFixedHzCVDepthCV(op)];  cvFixedHzDepth[op]  = bus ? busFrames + (bus-1)*numFrames : NULL;
     }
 
     // Sync state (edge detection)
@@ -661,6 +834,8 @@ static void step(
             opFreq[op] = four::calc_frequency_fixed( p->opFixedHz[op], p->opFine[op] );
     }
 
+    bool anyFixedHzCV = cvFixedHz[0] || cvFixedHz[1] || cvFixedHz[2] || cvFixedHz[3];
+
     for ( int i = 0; i < numFrames; ++i )
     {
         // --- Per-sample modulations ---
@@ -670,8 +845,44 @@ static void step(
         if ( cvVOct && !p->midiGate )
             baseFreq = four::voct_to_freq( cvVOct[i] );
 
-        // Recompute op frequencies if V/OCT varies per sample
-        if ( cvVOct || cvFM )
+        // XM with CV
+        float xm = p->xm;
+        if ( cvXM )
+            xm = fminf( 1.0f, fmaxf( 0.0f, xm + cvXM[i] * 0.2f ) );
+
+        // Compute effective CV depths with CV-over-CV-depth modulation
+        // (must happen before frequency recomputation which uses fixedHzDepth)
+        float levelDepth[4], pmDepth[4], warpDepth[4], foldDepth[4];
+        float feedbackDepth[4], fixedHzDepth[4];
+        for ( int op = 0; op < 4; ++op )
+        {
+            levelDepth[op] = p->opLevelCVDepth[op];
+            if ( cvLevelDepth[op] )
+                levelDepth[op] = fminf( 1.0f, fmaxf( 0.0f, levelDepth[op] + cvLevelDepth[op][i] * 0.2f ) );
+
+            pmDepth[op] = p->opPMCVDepth[op];
+            if ( cvPMDepth[op] )
+                pmDepth[op] = fminf( 1.0f, fmaxf( 0.0f, pmDepth[op] + cvPMDepth[op][i] * 0.2f ) );
+
+            warpDepth[op] = p->opWarpCVDepth[op];
+            if ( cvWarpDepth[op] )
+                warpDepth[op] = fminf( 1.0f, fmaxf( 0.0f, warpDepth[op] + cvWarpDepth[op][i] * 0.2f ) );
+
+            foldDepth[op] = p->opFoldCVDepth[op];
+            if ( cvFoldDepth[op] )
+                foldDepth[op] = fminf( 1.0f, fmaxf( 0.0f, foldDepth[op] + cvFoldDepth[op][i] * 0.2f ) );
+
+            feedbackDepth[op] = p->opFeedbackCVDepth[op];
+            if ( cvFeedbackDepth[op] )
+                feedbackDepth[op] = fminf( 1.0f, fmaxf( 0.0f, feedbackDepth[op] + cvFeedbackDepth[op][i] * 0.2f ) );
+
+            fixedHzDepth[op] = p->opFixedHzCVDepth[op];
+            if ( cvFixedHzDepth[op] )
+                fixedHzDepth[op] = fminf( 1.0f, fmaxf( 0.0f, fixedHzDepth[op] + cvFixedHzDepth[op][i] * 0.2f ) );
+        }
+
+        // Recompute op frequencies if V/OCT, FM, or Fixed Hz CV varies per sample
+        if ( cvVOct || cvFM || anyFixedHzCV )
         {
             for ( int op = 0; op < 4; ++op )
             {
@@ -680,7 +891,12 @@ static void step(
                 if ( p->opFreqMode[op] == 0 )
                     opFreq[op] = four::calc_frequency_ratio( base, p->opCoarse[op], p->opFine[op] ) + fm;
                 else
-                    opFreq[op] = four::calc_frequency_fixed( p->opCoarse[op], p->opFine[op] ) + fm;
+                {
+                    float fixedHz = p->opFixedHz[op];
+                    if ( cvFixedHz[op] )
+                        fixedHz += cvFixedHz[op][i] * fixedHzDepth[op] * 1000.0f;
+                    opFreq[op] = four::calc_frequency_fixed( fixedHz, p->opFine[op] ) + fm;
+                }
                 if ( opFreq[op] < 0.0f ) opFreq[op] = 0.0f;
             }
         }
@@ -696,11 +912,6 @@ static void step(
             prevSync = cvSync[i];
         }
 
-        // XM with CV
-        float xm = p->xm;
-        if ( cvXM )
-            xm = fminf( 1.0f, fmaxf( 0.0f, xm + cvXM[i] * 0.2f ) );
-
         // Compute effective operator levels with CV modulation
         float effectiveLevel[4];
         for ( int op = 0; op < 4; ++op )
@@ -708,8 +919,7 @@ static void step(
             effectiveLevel[op] = p->opLevel[op];
             if ( cvLevel[op] )
             {
-                // CV is ±1.0, scale by depth and 0.2 factor for useful range
-                float cvContribution = cvLevel[op][i] * p->opLevelCVDepth[op] * 0.2f;
+                float cvContribution = cvLevel[op][i] * levelDepth[op] * 0.2f;
                 effectiveLevel[op] += cvContribution;
                 effectiveLevel[op] = fmaxf( 0.0f, fminf( 1.0f, effectiveLevel[op] ) );
             }
@@ -730,12 +940,15 @@ static void step(
                 // Gather modulation from algorithm routing
                 float pm = four::gather_modulation( op, opOut, effectiveLevel, xm, algo );
 
-                // Self-feedback
-                pm += four::calc_feedback( p->prevOutput[op], p->opFeedback[op] );
+                // Self-feedback with CV modulation
+                float feedback = p->opFeedback[op];
+                if ( cvFeedback[op] )
+                    feedback = fminf( 1.0f, fmaxf( 0.0f, feedback + cvFeedback[op][i] * feedbackDepth[op] * 0.2f ) );
+                pm += four::calc_feedback( p->prevOutput[op], feedback );
 
                 // External PM CV
                 if ( cvPM[op] )
-                    pm += cvPM[op][i] * p->opPMCVDepth[op];
+                    pm += cvPM[op][i] * pmDepth[op];
 
                 // Advance phase
                 four::phase_advance( p->phase[op], inc );
@@ -747,7 +960,7 @@ static void step(
                 // Warp amount with CV
                 float warp = p->opWarp[op];
                 if ( cvWarp[op] )
-                    warp = fminf( 1.0f, fmaxf( 0.0f, warp + cvWarp[op][i] * p->opWarpCVDepth[op] * 0.2f ) );
+                    warp = fminf( 1.0f, fmaxf( 0.0f, warp + cvWarp[op][i] * warpDepth[op] * 0.2f ) );
 
                 float sample;
                 if ( warp > 0.0f )
@@ -768,7 +981,7 @@ static void step(
                 // Fold amount with CV
                 float fold = p->opFold[op];
                 if ( cvFold[op] )
-                    fold = fminf( 1.0f, fmaxf( 0.0f, fold + cvFold[op][i] * p->opFoldCVDepth[op] * 0.2f ) );
+                    fold = fminf( 1.0f, fmaxf( 0.0f, fold + cvFold[op][i] * foldDepth[op] * 0.2f ) );
 
                 if ( fold > 0.0f )
                     sample = four::wave_fold( sample, fold, p->opFoldType[op] );

@@ -33,7 +33,8 @@ Inspired by the RYK Algo module and Yamaha DX9/TX81Z architecture.
 | 30-38 | Op2 (all params) | 39-47 | Op3 (all params) |
 | 48-56 | Op4 (all params) | 57-60 | Op1-4 Level CV Depth |
 | 61-64 | Op1-4 PM CV Depth | 65-68 | Op1-4 Warp CV Depth |
-| 69-72 | Op1-4 Fold CV Depth | | |
+| 69-72 | Op1-4 Fold CV Depth | 73-76 | Op1-4 Feedback CV Depth |
+| 77-80 | Op1-4 Fixed Hz CV Depth | | |
 
 *CC 19 sets channel, but messages only respond on the configured channel
 
@@ -43,8 +44,8 @@ Additional MIDI:
 
 ### Using MIDI CCs
 
-**Value scaling:** CCs use 0-127, scaled to each parameter's range:
-- Percentages (0-100) → 0-127 maps linearly
+**Value scaling:** CCs use 0-127, mapped 1:1 to each parameter's range:
+- Continuous params (Level, Feedback, Warp, Fold, XM, VCA, CV Depths) → 0-127 maps perfectly
 - Cents (-100 to +100) → 64 is center, lower is flat, higher is sharp
 - Enums (Algorithms, types) → Each value is a consecutive CC number
 
@@ -73,7 +74,29 @@ Four uses operator routing where higher-numbered operators modulate lower-number
 | 10 | (3+4)→(1,2) | Dual modulators into dual carriers. |
 | 11 | (2+3+4)→1 | Three modulators ganging on one carrier. |
 
-## CV Inputs (20 total, user-assignable)
+## Parameter Design
+
+Four separates control into two complementary paradigms:
+
+**Non-CV parameters** (knob/MIDI) set a base value via the UI or MIDI CC. These use a 0-127 range for perfect 1:1 MIDI CC mapping (except Fine Tune and Op Fine, which use ±100 cents for musical precision). These are the values you dial in and save with presets.
+
+**CV parameters** provide full-resolution modulation at audio rate. When a CV is connected, it adds to or offsets the base parameter value, scaled by a depth control. This gives you continuous float precision (32-bit) from your modular environment.
+
+Some parameters have *both* a non-CV version and a CV version:
+
+| Non-CV Parameter | CV Equivalent | Why Both? |
+|---|---|---|
+| Op Feedback (0-127) | Feedback CV + Depth | Feedback is a key timbral parameter — CV allows expressive, continuous sweeps that 128 MIDI steps can't capture |
+| Op Fixed Hz (1-9999) | Fixed Hz CV + Depth | Smooth frequency glides and vibrato in fixed mode need audio-rate control |
+| Op Level (0-127) | Level CV + Depth | Already existed — amplitude modulation is fundamental |
+| Op Warp (0-127) | Warp CV + Depth | Already existed — morphing waveforms smoothly |
+| Op Fold (0-127) | Fold CV + Depth | Already existed — sweeping fold amount for movement |
+
+The non-CV value acts as a **base/offset**, and the CV adds on top of it. Set Feedback to 30 via MIDI, then use an envelope on Feedback CV to sweep it dynamically during a note.
+
+**CV Depth parameters** themselves also accept CV modulation ("CV-over-CV-depth"). This lets you modulate *how much* a CV affects its target — for example, using an LFO to slowly open up the amount of amplitude modulation on an operator.
+
+## CV Inputs (53 total, user-assignable)
 
 **Global:**
 | CV | Function |
@@ -84,23 +107,25 @@ Four uses operator routing where higher-numbered operators modulate lower-number
 | Sync | Hard sync — resets all phases on rising edge |
 | Global VCA | Master output level |
 
-**Per-operator (4 CV each):**
-| CV | Function |
-|----|----------|
-| Level | Amplitude modulation of that operator |
-| PM | Phase modulation into that operator |
-| Warp | Wave warp amount |
-| Fold | Wave fold amount |
+**Per-operator (×4 each):**
+| CV | Depth Param | Depth CV | Function |
+|----|-------------|----------|----------|
+| Level CV | Level CV Depth | Level Depth CV | Amplitude modulation |
+| PM CV | PM CV Depth | PM Depth CV | Phase modulation |
+| Warp CV | Warp CV Depth | Warp Depth CV | Wave warp amount |
+| Fold CV | Fold CV Depth | Fold Depth CV | Wave fold amount |
+| Feedback CV | Feedback CV Depth | Feedback Depth CV | Self-feedback amount |
+| Fixed Hz CV | Fixed Hz CV Depth | Fixed Hz Depth CV | Frequency offset (fixed mode) |
 
 ## Wave Shaping
 
 Every operator has wave shaping *before* any modulation or output.
 
 **Wave Warp:** Morphs the base sine through other waveforms.
-- 0%: Pure sine
-- 33%: Triangle
-- 67%: Sawtooth
-- 100%: Pulse/square
+- 0: Pure sine
+- ~42: Triangle
+- ~85: Sawtooth
+- 127: Pulse/square
 
 Use it to add harmonics before FM hits. More harmonics = richer modulation results.
 
@@ -109,7 +134,7 @@ Use it to add harmonics before FM hits. More harmonics = richer modulation resul
 - **Asymmetric:** Only positive peaks fold, negative clips
 - **Soft Clip:** Gentle saturation
 
-Small amounts (10-30%) add sparkle. High amounts (70%+) create distortion.
+Small amounts (10-40) add sparkle. High amounts (90+) create distortion.
 
 ## About Four
 
@@ -119,7 +144,8 @@ Four is a 4-operator FM synthesizer for Disting NT, created because I wanted the
 - Mono output only — keeps it focused
 - Wave warp and fold on every operator — more timbral range than pure FM
 - No built-in envelope — use your own ADSR/VCA
-- MIDI CCs for every parameter — playable from a keyboard
+- 0-127 range on continuous params — perfect 1:1 MIDI CC mapping
+- Every CV parameter also accepts CV modulation of its depth
 
 **Name:** "Four" for the four operators. Simple as that.
 

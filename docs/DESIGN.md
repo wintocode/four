@@ -9,7 +9,7 @@ Mono output. No stereo, no panning, no chorus.
 
 ## Algorithms
 
-8 DX9-style algorithms defining modulator/carrier routing between the 4 operators.
+11 algorithms defining modulator/carrier routing between the 4 operators.
 Operators are numbered 1-4. Higher-numbered operators modulate lower-numbered ones.
 Carriers output to the mix; modulators feed into other operators' phase inputs.
 
@@ -39,27 +39,66 @@ Any oscillator can have warp and fold applied regardless of carrier/modulator ro
 
 ## Global Parameters
 
-- **Algorithm** (1-8)
-- **XM** — cross modulation master depth (scales modulator outputs only, not carriers)
-- **Fine Tune** (+/- cents)
+- **Algorithm** (1-11)
+- **XM** (0-127) — cross modulation master depth (scales modulator outputs only, not carriers)
+- **Fine Tune** (±100 cents)
 - **Oversampling**: None / 2× (4 effective options: 48kHz, 48kHz→96kHz, 96kHz, 96kHz→192kHz)
 - **PolyBLEP**: On / Off (anti-aliasing for warped waveforms)
 - **MIDI channel**
-- **Global VCA level**
+- **Global VCA level** (0-127)
+
+## Parameter Resolution Design
+
+### Non-CV Parameters (Discrete, 0-127)
+
+All continuous parameters use a 0-127 integer range for perfect 1:1 MIDI CC mapping.
+This gives 128 steps of resolution — enough for static values and coarse control, but not
+for smooth audio-rate modulation. These values are set via the UI or MIDI CC and stored
+in presets.
+
+**Exception:** Fine Tune and Op Fine use ±100 cents (semitone range) because this has
+direct musical meaning that would be lost with an arbitrary 0-127 scale.
+
+### CV Parameters (Continuous, Full Resolution)
+
+For parameters that benefit from smooth, continuous modulation, Four provides dedicated
+CV inputs. CV signals are 32-bit float at audio rate — no stepping, no quantization.
+Each CV input has an associated **depth** parameter (0-127) that scales how much the
+CV signal affects the target.
+
+The non-CV value acts as a **base**, and the CV adds on top:
+```
+effective_value = base_param + (CV_signal × depth × scale)
+```
+
+### CV-over-CV-Depth
+
+Every CV depth parameter also has its own CV bus selector, allowing the depth itself
+to be modulated by a CV signal. This enables effects like:
+- Using an LFO to slowly open up amplitude modulation
+- Using an envelope to control how much a modulator affects pitch
+- Voltage-controlled mixing of modulation sources
 
 ## CV Inputs (user-assignable to Disting NT buses)
 
+**Global (5):**
 - V/OCT — pitch CV
 - XM CV — cross modulation amount
 - FM CV — frequency modulation for all oscillators
 - Sync — phase reset trigger for all oscillators
-- Osc 1-4 AM CV (×4) — per-oscillator amplitude modulation
-- Osc 1-4 PM CV (×4) — per-oscillator phase modulation
-- Osc 1-4 Warp CV (×4) — per-oscillator wave warp
-- Osc 1-4 Fold CV (×4) — per-oscillator wave fold
 - Global VCA CV
 
-Total: 20 CV inputs, all independently routable to any bus.
+**Per-operator (18 each, ×4 = 72):**
+- Level CV + Level CV Depth + Level Depth CV
+- PM CV + PM CV Depth + PM Depth CV
+- Warp CV + Warp CV Depth + Warp Depth CV
+- Fold CV + Fold CV Depth + Fold Depth CV
+- Feedback CV + Feedback CV Depth + Feedback Depth CV
+- Fixed Hz CV + Fixed Hz CV Depth + Fixed Hz Depth CV
+
+Total: 77 CV-routing parameters (5 global + 72 per-operator).
+Of these, 53 are bus selectors (5 global + 24 per-op main + 24 per-op depth)
+and 24 are depth values (6 per operator × 4).
 
 ## Audio Output
 
@@ -68,16 +107,23 @@ Total: 20 CV inputs, all independently routable to any bus.
 ## Signal Flow
 
 ```
-Per oscillator:
-  base_freq = V/OCT (or MIDI note) × ratio (or fixed Hz)
-  phase += base_freq + PM_from_algorithm + PM_CV + FM_CV + self_feedback
+Per-sample:
+  // CV-over-CV-depth modulation
+  effective_depth = depth_param + (depth_CV × scale)
+
+  // Frequency
+  base_freq = V/OCT (or MIDI note) × ratio (or fixed Hz + fixedHz_CV × fixedHz_depth)
+
+  // Operator processing
+  phase += base_freq + PM_from_algorithm + PM_CV × pm_depth + FM_CV + self_feedback_CV
   waveform = sine(phase)
-  waveform = wave_warp(waveform, warp_amount + warp_CV)
-  waveform = wave_fold(waveform, fold_amount + fold_CV, fold_type)
-  output = waveform × level × AM_CV
+  waveform = wave_warp(waveform, warp_amount + warp_CV × warp_depth)
+  waveform = wave_fold(waveform, fold_amount + fold_CV × fold_depth, fold_type)
+  effective_level = clamp(level + level_CV × level_depth × scale, 0, 1)
+  output = waveform  // scaled by effective_level during routing
 
 Algorithm routing:
-  modulator outputs → carrier phase inputs (scaled by XM)
+  modulator outputs → carrier phase inputs (scaled by XM + XM_CV)
   carrier outputs → summed → × Global VCA → mono out
 
 Sync trigger → reset all phase accumulators to 0
@@ -87,8 +133,11 @@ Sync trigger → reset all phase accumulators to 0
 
 - **Note on/off** → sets base frequency (overrides V/OCT when active)
 - **Pitch bend** → bends base frequency
-- **CC mapping** → plugin-level mapping of MIDI CCs to all parameters
+- **CC 14-80** → 67 value parameters mapped (all non-bus-selector params)
 - **MIDI channel** selectable via parameter
+
+CV bus selectors are not controllable via MIDI CC; they are static routing
+set via the Disting NT UI.
 
 ## Anti-Aliasing Strategy
 
