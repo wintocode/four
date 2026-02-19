@@ -504,51 +504,7 @@ static const _NT_parameterPages parameterPages = {
 };
 
 // --- MIDI CC mapping ---
-
-// CC 14-80 → 67 value parameters (excludes CV bus selectors)
-// 7 global + 36 per-op (9×4) + 16 CV depths (4×4) + 8 new CV depths (Feedback + Fixed Hz)
-static const int8_t ccToParam[128] = {
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,                     // 0-13
-    kParamAlgorithm, kParamXM, kParamFineTune,                      // 14-16
-    kParamOversampling, kParamPolyBLEP, kParamMidiChannel,          // 17-19
-    kParamGlobalVCA,                                                // 20
-    kParamOp1FreqMode, kParamOp1Coarse, kParamOp1FixedHz,          // 21-23
-    kParamOp1Fine, kParamOp1Level, kParamOp1Feedback,               // 24-26
-    kParamOp1Warp, kParamOp1Fold, kParamOp1FoldType,                // 27-29
-    kParamOp2FreqMode, kParamOp2Coarse, kParamOp2FixedHz,          // 30-32
-    kParamOp2Fine, kParamOp2Level, kParamOp2Feedback,               // 33-35
-    kParamOp2Warp, kParamOp2Fold, kParamOp2FoldType,                // 36-38
-    kParamOp3FreqMode, kParamOp3Coarse, kParamOp3FixedHz,          // 39-41
-    kParamOp3Fine, kParamOp3Level, kParamOp3Feedback,               // 42-44
-    kParamOp3Warp, kParamOp3Fold, kParamOp3FoldType,                // 45-47
-    kParamOp4FreqMode, kParamOp4Coarse, kParamOp4FixedHz,          // 48-50
-    kParamOp4Fine, kParamOp4Level, kParamOp4Feedback,               // 51-53
-    kParamOp4Warp, kParamOp4Fold, kParamOp4FoldType,                // 54-56
-    kParamOp1LevelCVDepth, kParamOp2LevelCVDepth,                  // 57-58
-    kParamOp3LevelCVDepth, kParamOp4LevelCVDepth,                  // 59-60
-    kParamOp1PMCVDepth, kParamOp2PMCVDepth,                        // 61-62
-    kParamOp3PMCVDepth, kParamOp4PMCVDepth,                        // 63-64
-    kParamOp1WarpCVDepth, kParamOp2WarpCVDepth,                    // 65-66
-    kParamOp3WarpCVDepth, kParamOp4WarpCVDepth,                    // 67-68
-    kParamOp1FoldCVDepth, kParamOp2FoldCVDepth,                    // 69-70
-    kParamOp3FoldCVDepth, kParamOp4FoldCVDepth,                    // 71-72
-    kParamOp1FeedbackCVDepth, kParamOp2FeedbackCVDepth,            // 73-74
-    kParamOp3FeedbackCVDepth, kParamOp4FeedbackCVDepth,            // 75-76
-    kParamOp1FixedHzCVDepth, kParamOp2FixedHzCVDepth,              // 77-78
-    kParamOp3FixedHzCVDepth, kParamOp4FixedHzCVDepth,              // 79-80
-    -1,-1,-1,-1,-1,-1,-1,-1,                                       // 81-88
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 89-104
-    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,               // 105-120
-    -1,-1,-1,-1,-1,-1,-1                                           // 121-127
-};
-
-// Scale CC value (0-127) to parameter's min..max range
-static int16_t scaleCCToParam( uint8_t ccValue, int paramIndex )
-{
-    int16_t mn = parameters[paramIndex].min;
-    int16_t mx = parameters[paramIndex].max;
-    return mn + (int16_t)( (int32_t)ccValue * ( mx - mn ) / 127 );
-}
+// Four does not respond to MIDI CC messages. All parameter control is via CV inputs.
 
 // --- Lifecycle ---
 
@@ -1060,17 +1016,6 @@ static void midiMessage(
         if ( byte1 == p->midiNote )
             p->midiGate = 0;
         break;
-
-    case 0xB0:  // Control Change
-    {
-        int8_t paramIdx = ccToParam[byte1];
-        if ( paramIdx >= 0 )
-        {
-            int16_t value = scaleCCToParam( byte2, paramIdx );
-            NT_setParameterFromAudio( NT_algorithmIndex(self), paramIdx, value );
-        }
-        break;
-    }
 
     case 0xE0:  // Pitch Bend
     {

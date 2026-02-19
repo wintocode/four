@@ -54,10 +54,9 @@ Any oscillator can have warp and fold applied regardless of carrier/modulator ro
 
 ### Non-CV Parameters (Discrete, 0-127)
 
-All continuous parameters use a 0-127 integer range for perfect 1:1 MIDI CC mapping.
+All continuous parameters use a 0-127 integer range.
 This gives 128 steps of resolution — enough for static values and coarse control, but not
-for smooth audio-rate modulation. These values are set via the UI or MIDI CC and stored
-in presets.
+for smooth audio-rate modulation. These values are set via the UI and stored in presets.
 
 **Exception:** Fine Tune and Op Fine use ±100 cents (semitone range) because this has
 direct musical meaning that would be lost with an arbitrary 0-127 scale.
@@ -135,12 +134,11 @@ Sync trigger → reset all phase accumulators to 0
 ## MIDI
 
 - **Note on/off** → sets base frequency (overrides V/OCT when active)
-- **Pitch bend** → bends base frequency
-- **CC 14-80** → 67 value parameters mapped (all non-bus-selector params)
+- **Pitch bend** → ±2 semitones
 - **MIDI channel** selectable via parameter
 
-CV bus selectors are not controllable via MIDI CC; they are static routing
-set via the Disting NT UI.
+Four does not respond to MIDI CC. All parameter modulation is via CV inputs
+for full-resolution control.
 
 ## Anti-Aliasing Strategy
 

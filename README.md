@@ -21,40 +21,17 @@ Inspired by the RYK Algo module and Yamaha DX9/TX81Z architecture.
 - **Wave Warp**: Morphs sine → triangle → sawtooth → pulse
 - **Wave Fold**: Adds harmonics by folding back waveform peaks
 
-## MIDI CC Reference
+## MIDI
 
-| CC | Parameter | CC | Parameter |
-|----|-----------|----|----------|
-| 14 | Algorithm | 15 | XM |
-| 16 | Fine Tune | 17 | Oversampling |
-| 18 | PolyBLEP | 19 | MIDI Channel* |
-| 20 | Global VCA | 21-23 | Op1: Freq Mode, Coarse, Fixed Hz |
-| 24-26 | Op1: Fine, Level, Feedback | 27-29 | Op1: Warp, Fold, Fold Type |
-| 30-38 | Op2 (all params) | 39-47 | Op3 (all params) |
-| 48-56 | Op4 (all params) | 57-60 | Op1-4 Level CV Depth |
-| 61-64 | Op1-4 PM CV Depth | 65-68 | Op1-4 Warp CV Depth |
-| 69-72 | Op1-4 Fold CV Depth | 73-76 | Op1-4 Feedback CV Depth |
-| 77-80 | Op1-4 Fixed Hz CV Depth | | |
+Four responds to these MIDI messages on the selected channel:
 
-*CC 19 sets channel, but messages only respond on the configured channel
+| Message | Function |
+|---------|----------|
+| Note On | Sets base frequency, opens gate (overrides V/OCT) |
+| Note Off | Closes gate |
+| Pitch Bend | ±2 semitones |
 
-Additional MIDI:
-- **Pitch Bend**: ±2 semitones
-- **Note On/Off**: Sets base frequency (overrides V/OCT when gate is on)
-
-### Using MIDI CCs
-
-**Value scaling:** CCs use 0-127, mapped 1:1 to each parameter's range:
-- Continuous params (Level, Feedback, Warp, Fold, XM, VCA, CV Depths) → 0-127 maps perfectly
-- Cents (-100 to +100) → 64 is center, lower is flat, higher is sharp
-- Enums (Algorithms, types) → Each value is a consecutive CC number
-
-**Performance tips:**
-- **XM (CC 15)**: Great for live modulation. Start subtle (0-40) for evolving pads, crank it (80-127) for metallic chaos.
-- **Op Levels (CCs 25, 34, 43, 52)**: The primary way to shape timbre.
-- **Feedback (CCs 26, 35, 44, 53)**: Small amounts (10-30) add growl; high amounts create noise.
-- **Warp (CCs 27, 36, 45, 54)**: 0-42 = sine territory, 43-85 = saw/triangle, 86+ = pulse harmonics.
-- **Fold (CCs 28, 37, 46, 55)**: 0-30 adds sparkle, 31-70 adds aggression, 71+ creates distortion.
+All other parameter control is via CV inputs. Four does not respond to MIDI CC.
 
 ## Algorithms
 
@@ -78,7 +55,7 @@ Four uses operator routing where higher-numbered operators modulate lower-number
 
 Four separates control into two complementary paradigms:
 
-**Non-CV parameters** (knob/MIDI) set a base value via the UI or MIDI CC. These use a 0-127 range for perfect 1:1 MIDI CC mapping (except Fine Tune and Op Fine, which use ±100 cents for musical precision). These are the values you dial in and save with presets.
+**Non-CV parameters** (knob) set a base value via the UI. These use a 0-127 range (except Fine Tune and Op Fine, which use ±100 cents for musical precision). These are the values you dial in and save with presets.
 
 **CV parameters** provide full-resolution modulation at audio rate. When a CV is connected, it adds to or offsets the base parameter value, scaled by a depth control. This gives you continuous float precision (32-bit) from your modular environment.
 
@@ -92,7 +69,7 @@ Some parameters have *both* a non-CV version and a CV version:
 | Op Warp (0-127) | Warp CV + Depth | Already existed — morphing waveforms smoothly |
 | Op Fold (0-127) | Fold CV + Depth | Already existed — sweeping fold amount for movement |
 
-The non-CV value acts as a **base/offset**, and the CV adds on top of it. Set Feedback to 30 via MIDI, then use an envelope on Feedback CV to sweep it dynamically during a note.
+The non-CV value acts as a **base/offset**, and the CV adds on top of it. Set Feedback to 30 via the UI, then use an envelope on Feedback CV to sweep it dynamically during a note.
 
 **CV Depth parameters** themselves also accept CV modulation ("CV-over-CV-depth"). This lets you modulate *how much* a CV affects its target — for example, using an LFO to slowly open up the amount of amplitude modulation on an operator.
 
@@ -144,7 +121,7 @@ Four is a 4-operator FM synthesizer for Disting NT, created because I wanted the
 - Mono output only — keeps it focused
 - Wave warp and fold on every operator — more timbral range than pure FM
 - No built-in envelope — use your own ADSR/VCA
-- 0-127 range on continuous params — perfect 1:1 MIDI CC mapping
+- No MIDI CC — all modulation via CV for full-resolution control
 - Every CV parameter also accepts CV modulation of its depth
 
 **Name:** "Four" for the four operators. Simple as that.
