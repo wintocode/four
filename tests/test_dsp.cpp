@@ -379,6 +379,137 @@ TEST(polyblep_saw_reduces_aliasing)
     ASSERT( fabsf(blep_transition) < fabsf(raw_transition) );
 }
 
+// --- DC Blocker ---
+
+TEST(dc_blocker_removes_dc)
+{
+    // A constant DC input should be attenuated to near-zero
+    four::DCBlocker dc;
+    float out = 0.0f;
+    for ( int i = 0; i < 10000; ++i )
+        out = dc.process( 1.0f );
+    ASSERT( fabsf(out) < 0.01f );
+}
+
+TEST(dc_blocker_passes_ac)
+{
+    // A sine wave should pass through with minimal attenuation
+    four::DCBlocker dc;
+    float maxOut = 0.0f;
+    // Run for a few cycles at 440Hz/48kHz to let filter settle
+    for ( int i = 0; i < 2000; ++i )
+    {
+        float input = sinf( (float)i * 440.0f / 48000.0f * 6.283185f );
+        float out = dc.process( input );
+        if ( i > 500 ) // after settling
+        {
+            float a = fabsf(out);
+            if ( a > maxOut ) maxOut = a;
+        }
+    }
+    // Should pass most of the signal (at least 90%)
+    ASSERT( maxOut > 0.9f );
+}
+
+// --- flush_denormal ---
+
+TEST(flush_denormal_zero)
+{
+    float x = 0.0f;
+    four::flush_denormal( x );
+    ASSERT_NEAR( x, 0.0f, 0.0f );
+}
+
+TEST(flush_denormal_tiny)
+{
+    float x = 1e-20f;
+    four::flush_denormal( x );
+    ASSERT_NEAR( x, 0.0f, 0.0f );
+}
+
+TEST(flush_denormal_normal)
+{
+    float x = 0.5f;
+    four::flush_denormal( x );
+    ASSERT_NEAR( x, 0.5f, 0.0f );
+}
+
+// --- V/OCT negative voltage ---
+
+TEST(voct_negative_voltage)
+{
+    // -1V should be one octave below C4
+    float f = four::voct_to_freq( -1.0f );
+    ASSERT_NEAR( f, 130.815f, 0.5f );
+}
+
+// --- Missing algorithm tests ---
+
+TEST(algorithm_2_parallel_to_serial)
+{
+    // Algo 2: (3+4)→2→1, carriers: {1}
+    const four::Algorithm& a = four::algorithms[1];
+    ASSERT( a.mod[2][1] );   // 3→2
+    ASSERT( a.mod[3][1] );   // 4→2
+    ASSERT( a.mod[1][0] );   // 2→1
+    ASSERT( a.carrier[0] );
+    ASSERT( !a.carrier[1] );
+    ASSERT( !a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_3_split_to_one)
+{
+    // Algo 3: (4→2→1) + (3→1), carriers: {1}
+    const four::Algorithm& a = four::algorithms[2];
+    ASSERT( a.mod[3][1] );   // 4→2
+    ASSERT( a.mod[1][0] );   // 2→1
+    ASSERT( a.mod[2][0] );   // 3→1
+    ASSERT( a.carrier[0] );
+    ASSERT( !a.carrier[1] );
+    ASSERT( !a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_4_y_shape)
+{
+    // Algo 4: (4→3→1) + (2→1), carriers: {1}
+    const four::Algorithm& a = four::algorithms[3];
+    ASSERT( a.mod[3][2] );   // 4→3
+    ASSERT( a.mod[2][0] );   // 3→1
+    ASSERT( a.mod[1][0] );   // 2→1
+    ASSERT( a.carrier[0] );
+    ASSERT( !a.carrier[1] );
+    ASSERT( !a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_6_one_to_three)
+{
+    // Algo 6: 4→(1,2,3), carriers: {1,2,3}
+    const four::Algorithm& a = four::algorithms[5];
+    ASSERT( a.mod[3][0] );   // 4→1
+    ASSERT( a.mod[3][1] );   // 4→2
+    ASSERT( a.mod[3][2] );   // 4→3
+    ASSERT( a.carrier[0] );
+    ASSERT( a.carrier[1] );
+    ASSERT( a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
+TEST(algorithm_7_partial_mod)
+{
+    // Algo 7: (4→3) + 2 + 1, carriers: {1,2,3}
+    const four::Algorithm& a = four::algorithms[6];
+    ASSERT( a.mod[3][2] );   // 4→3
+    ASSERT( !a.mod[3][0] );  // 4 does NOT mod 1
+    ASSERT( !a.mod[3][1] );  // 4 does NOT mod 2
+    ASSERT( a.carrier[0] );
+    ASSERT( a.carrier[1] );
+    ASSERT( a.carrier[2] );
+    ASSERT( !a.carrier[3] );
+}
+
 // --- Runner ---
 
 int main()
@@ -421,6 +552,17 @@ int main()
     run_polyblep_correction_near_zero();
     run_polyblep_correction_far_from_edge();
     run_polyblep_saw_reduces_aliasing();
+    run_dc_blocker_removes_dc();
+    run_dc_blocker_passes_ac();
+    run_flush_denormal_zero();
+    run_flush_denormal_tiny();
+    run_flush_denormal_normal();
+    run_voct_negative_voltage();
+    run_algorithm_2_parallel_to_serial();
+    run_algorithm_3_split_to_one();
+    run_algorithm_4_y_shape();
+    run_algorithm_6_one_to_three();
+    run_algorithm_7_partial_mod();
 
     printf("\n%d/%d tests passed.\n", tests_passed, tests_run);
     return 0;

@@ -46,7 +46,8 @@ struct _fourAlgorithm : public _NT_algorithm
     uint8_t midiChannel;     // 0-15
 
     // Oversampling state
-    float dsBuffer[2];       // Downsample filter state
+    float dsBuffer;          // Downsample filter state
+    float prevSync;          // Sync edge detection state
     four::DCBlocker dcBlocker;                // DC blocker
 
     _fourAlgorithm()
@@ -82,8 +83,8 @@ struct _fourAlgorithm : public _NT_algorithm
         midiNote = 60;
         midiGate = 0;
         midiChannel = 0;
-        dsBuffer[0] = 0.0f;
-        dsBuffer[1] = 0.0f;
+        dsBuffer = 0.0f;
+        prevSync = 0.0f;
     }
 };
 
@@ -318,10 +319,10 @@ static const char* versionStrings[] = { FOUR_VERSION, NULL };
     { "Op" #n " Coarse",    0, 64, 3, kNT_unitEnum, 0, ratioStrings }, \
     { "Op" #n " Fixed Hz",  1, 9999, 440, kNT_unitHz, 0, NULL }, \
     { "Op" #n " Fine",   -100, 100, 0, kNT_unitCents, 0, NULL }, \
-    { "Op" #n " Level",     0, 127, 127, kNT_unitNone, 0, NULL }, \
-    { "Op" #n " Feedback",  0, 127, 0, kNT_unitNone, 0, NULL }, \
-    { "Op" #n " Warp",      0, 127, 0, kNT_unitNone, 0, NULL }, \
-    { "Op" #n " Fold",      0, 127, 0, kNT_unitNone, 0, NULL }, \
+    { "Op" #n " Level",     0, 127, 127, kNT_unitHasStrings, 0, NULL }, \
+    { "Op" #n " Feedback",  0, 127, 0, kNT_unitHasStrings, 0, NULL }, \
+    { "Op" #n " Warp",      0, 127, 0, kNT_unitHasStrings, 0, NULL }, \
+    { "Op" #n " Fold",      0, 127, 0, kNT_unitHasStrings, 0, NULL }, \
     { "Op" #n " Fold Type", 0, 2, 0, kNT_unitEnum, 0, foldTypeStrings },
 
 static _NT_parameter parameters[] = {
@@ -330,12 +331,12 @@ static _NT_parameter parameters[] = {
 
     // Global
     { "Algorithm",    0,   10,   0,   kNT_unitEnum,    0, algorithmStrings },
-    { "XM",           0,  127,   0,   kNT_unitNone, 0, NULL },
+    { "XM",           0,  127,   0,   kNT_unitHasStrings, 0, NULL },
     { "Fine Tune",  -100, 100,   0,   kNT_unitCents,   0, NULL },
     { "Oversampling",    0,    1,   1,   kNT_unitEnum,    0, off2xStrings },
     { "PolyBLEP",       0,    1,   1,   kNT_unitEnum,    0, offOnStrings },
     { "MIDI Channel",   1,   16,   1,   kNT_unitNone,    0, NULL },
-    { "Global VCA",   0,  127, 127,   kNT_unitNone, 0, NULL },
+    { "Global VCA",   0,  127, 127,   kNT_unitHasStrings, 0, NULL },
 
     // Version (read-only)
     { "Version",      0,    0,   0,   kNT_unitEnum,    0, versionStrings },
@@ -347,28 +348,28 @@ static _NT_parameter parameters[] = {
     OP_PARAMS(4)
 
     // Operator Level CV Depth
-    { "Op1 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op2 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op3 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op4 Level CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op1 Level CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op2 Level CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op3 Level CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op4 Level CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
 
     // Operator PM CV Depth
-    { "Op1 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op2 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op3 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op4 PM CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op1 PM CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op2 PM CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op3 PM CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op4 PM CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
 
     // Operator Warp CV Depth
-    { "Op1 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op2 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op3 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op4 Warp CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op1 Warp CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op2 Warp CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op3 Warp CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op4 Warp CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
 
     // Operator Fold CV Depth
-    { "Op1 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op2 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op3 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op4 Fold CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op1 Fold CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op2 Fold CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op3 Fold CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op4 Fold CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
 
     // CV Inputs
     NT_PARAMETER_CV_INPUT( "V/OCT CV",       0, 0 )
@@ -394,16 +395,16 @@ static _NT_parameter parameters[] = {
     NT_PARAMETER_CV_INPUT( "Op4 Fold CV",    0, 0 )
 
     // Feedback CV Depth
-    { "Op1 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op2 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op3 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op4 Feedback CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op1 Feedback CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op2 Feedback CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op3 Feedback CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op4 Feedback CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
 
     // Fixed Hz CV Depth
-    { "Op1 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op2 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op3 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
-    { "Op4 Fixed Hz CV Depth", 0, 127, 0, kNT_unitNone, 0, NULL },
+    { "Op1 Fixed Hz CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op2 Fixed Hz CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op3 Fixed Hz CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
+    { "Op4 Fixed Hz CV Depth", 0, 127, 0, kNT_unitHasStrings, 0, NULL },
 
     // Feedback CV Inputs
     NT_PARAMETER_CV_INPUT( "Op1 Feedback CV", 0, 0 )
@@ -821,7 +822,7 @@ static void step(
     }
 
     // Sync state (edge detection)
-    float prevSync = p->dsBuffer[1];
+    float prevSync = p->prevSync;
 
     // Pre-compute operator frequencies
     float opFreq[4];
@@ -898,6 +899,7 @@ static void step(
                     opFreq[op] = four::calc_frequency_fixed( fixedHz, p->opFine[op] ) + fm;
                 }
                 if ( opFreq[op] < 0.0f ) opFreq[op] = 0.0f;
+                if ( opFreq[op] > effectiveSampleRate * 0.5f ) opFreq[op] = effectiveSampleRate * 0.5f;
             }
         }
 
@@ -1003,9 +1005,9 @@ static void step(
             if ( actualRate == 1 )
                 outputSample = subSample;
             else if ( os == 0 )
-                p->dsBuffer[0] = subSample;
+                p->dsBuffer = subSample;
             else
-                outputSample = four::downsample_2x( p->dsBuffer[0], subSample );
+                outputSample = four::downsample_2x( p->dsBuffer, subSample );
         }
 
         // Apply DC blocking to final output
@@ -1018,7 +1020,7 @@ static void step(
             out[i] += outputSample;
     }
 
-    p->dsBuffer[1] = prevSync;  // Store sync state
+    p->prevSync = prevSync;
 }
 
 // --- MIDI ---
@@ -1081,6 +1083,41 @@ static void midiMessage(
     }
 }
 
+// --- Parameter string display ---
+
+// Helper: check if a parameter is a 0-127 continuous param that should display as "0.00"-"1.00"
+static bool isParam0to127( int param )
+{
+    // XM, Global VCA
+    if ( param == kParamXM || param == kParamGlobalVCA )
+        return true;
+    // Per-operator: Level, Feedback, Warp, Fold (offsets 4-7 within each op block)
+    for ( int op = 0; op < 4; ++op )
+    {
+        int base = kParamOp1FreqMode + op * 9;
+        if ( param >= base + kOpLevel && param <= base + kOpFold )
+            return true;
+    }
+    // All CV Depth params (Level, PM, Warp, Fold, Feedback, Fixed Hz)
+    if ( param >= kParamOp1LevelCVDepth && param <= kParamOp4FoldCVDepth )
+        return true;
+    if ( param >= kParamOp1FeedbackCVDepth && param <= kParamOp4FixedHzCVDepth )
+        return true;
+    return false;
+}
+
+static int fourParameterString( _NT_algorithm* self, int param, int val, char* buff )
+{
+    if ( isParam0to127( param ) )
+    {
+        float v = (float)val / 127.0f;
+        int len = NT_floatToString( buff, v, 2 );
+        buff[len] = '\0';
+        return len;
+    }
+    return 0;
+}
+
 // --- Factory ---
 
 static const _NT_factory factory = {
@@ -1106,7 +1143,7 @@ static const _NT_factory factory = {
     .deserialise = NULL,
     .midiSysEx = NULL,
     .parameterUiPrefix = NULL,
-    .parameterString = NULL,
+    .parameterString = fourParameterString,
 };
 
 // --- Version ---

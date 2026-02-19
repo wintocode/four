@@ -23,6 +23,9 @@ Carriers output to the mix; modulators feed into other operators' phase inputs.
 | 6 | 4→(1, 2, 3)             | 1, 2, 3      |
 | 7 | (4→3) + 2 + 1           | 1, 2, 3      |
 | 8 | 1 + 2 + 3 + 4           | all          |
+| 9 | 4→3→(1, 2)              | 1, 2         |
+| 10| (3+4)→(1, 2)            | 1, 2         |
+| 11| (2+3+4)→1               | 1            |
 
 ## Per Oscillator (×4)
 
