@@ -136,17 +136,29 @@ inline float soft_clip( float x )
     return x * ( 27.0f + x2 ) / ( 27.0f + 9.0f * x2 );
 }
 
-// Symmetric fold: sin-based fold that wraps signal back within [-1, 1]
+// Triangle-wave fold: wraps signal smoothly into [-1, 1] with no discontinuities.
+// Maps x into a triangle wave of period 4 and amplitude 1.
+inline float triangle_fold( float x )
+{
+    // Shift so that x=0 maps to the rising zero-crossing
+    float t = x + 1.0f;
+    // Mod into [0, 4) range
+    t = t - 4.0f * floorf( t * 0.25f );
+    // Triangle: rise 0→2, then fall 2→4
+    return ( t < 2.0f ) ? ( t - 1.0f ) : ( 3.0f - t );
+}
+
+// Symmetric fold: triangle fold that wraps signal back within [-1, 1]
 inline float fold_symmetric( float x )
 {
-    return sinf( x * 1.5707963f );  // sin(x * π/2)
+    return triangle_fold( x );
 }
 
 // Asymmetric fold: positive folds, negative clips
 inline float fold_asymmetric( float x )
 {
     if ( x >= 0.0f )
-        return sinf( x * 1.5707963f );
+        return triangle_fold( x );
     else
         return soft_clip( x );
 }
