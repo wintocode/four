@@ -1,4 +1,2 @@
-plugins/*.o
-plugins/plugin.json
 tests/test_dsp
 tests/*.dSYM/
